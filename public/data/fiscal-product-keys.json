@@ -1,0 +1,21 @@
+[
+  { "value": "01010101", "label": "01010101 - No existe en el catálogo" },
+  { "value": "10101500", "label": "10101500 - Animales vivos de granja" },
+  { "value": "10101600", "label": "10101600 - Aves de corral vivas" },
+  { "value": "25171500", "label": "25171500 - Herramientas manuales" },
+  { "value": "25171600", "label": "25171600 - Herramientas eléctricas" },
+  { "value": "30161500", "label": "30161500 - Cables eléctricos" },
+  { "value": "30161600", "label": "30161600 - Conectores eléctricos" },
+  { "value": "31151500", "label": "31151500 - Tornillos" },
+  { "value": "31151600", "label": "31151600 - Tuercas" },
+  { "value": "31151700", "label": "31151700 - Clavos" },
+  { "value": "31201500", "label": "31201500 - Pinturas" },
+  { "value": "31201600", "label": "31201600 - Barnices" },
+  { "value": "39101600", "label": "39101600 - Cemento" },
+  { "value": "39101700", "label": "39101700 - Arena" },
+  { "value": "39101800", "label": "39101800 - Grava" },
+  { "value": "40101500", "label": "40101500 - Tubos de PVC" },
+  { "value": "40101600", "label": "40101600 - Tubos de cobre" },
+  { "value": "46171500", "label": "46171500 - Llaves de paso" },
+  { "value": "46171600", "label": "46171600 - Válvulas" }
+]
