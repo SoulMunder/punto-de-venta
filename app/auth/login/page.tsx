@@ -7,11 +7,11 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { useRouter, useSearchParams } from "next/navigation"
-import { useState } from "react"
+import { useState, Suspense } from "react"
 import Image from "next/image"
 import { PasswordInput } from "@/components/ui/password-input"
 
-export default function LoginPage() {
+function LoginForm() {
   const [username, setUsername] = useState("")
   const [password, setPassword] = useState("")
   const [error, setError] = useState<string | null>(null)
@@ -107,5 +107,36 @@ export default function LoginPage() {
         </Card>
       </div>
     </div>
+  )
+}
+
+export default function LoginPage() {
+  return (
+    <Suspense fallback={
+      <div className="flex min-h-svh w-full items-center justify-center p-6 md:p-10 bg-linear-to-br from-slate-50 to-slate-100">
+        <div className="w-full max-w-sm">
+          <Card>
+            <CardHeader className="text-center">
+              <div className="flex flex-col items-center gap-4 mb-2">
+                <Image
+                  src="/images/masicsa-logo.png"
+                  alt="MASICSA Logo"
+                  width={120}
+                  height={120}
+                  className="object-contain"
+                />
+                <div>
+                  <h1 className="text-3xl font-bold text-primary">MASICSA</h1>
+                  <CardTitle className="text-xl font-semibold mt-2">Punto de Venta</CardTitle>
+                </div>
+              </div>
+              <CardDescription>Cargando...</CardDescription>
+            </CardHeader>
+          </Card>
+        </div>
+      </div>
+    }>
+      <LoginForm />
+    </Suspense>
   )
 }
