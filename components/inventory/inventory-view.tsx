@@ -1,6 +1,6 @@
 "use client"
 
-import { useState, useEffect } from "react"
+import { useState, useEffect, useRef } from "react"
 import type { Branch, Product, Inventory } from "@/lib/types"
 import { Input } from "@/components/ui/input"
 import { Search, Eye, Package, Pencil, Trash2 } from "lucide-react"
@@ -9,6 +9,8 @@ import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
 import { ProductDetailsModal } from "@/components/products/product-details-modal"
 import { Card, CardContent, CardFooter, CardHeader } from "@/components/ui/card"
+import { Label } from "@/components/ui/label"
+
 
 
 
@@ -28,6 +30,16 @@ import Link from "next/link"
 import { DataTablePagination } from "./data-table-pagination"
 import { Skeleton } from "@/components/ui/skeleton"
 
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog"
+import { toast } from "sonner"
+
 interface ProductWithInventory extends Product {
   cantidad: number
   branch: {
@@ -36,17 +48,17 @@ interface ProductWithInventory extends Product {
   }
 }
 
+// 🟢 Recibe el estado del modal desde el padre
+interface InventoryViewProps {
+  manualModalOpen: boolean
+  setManualModalOpen: React.Dispatch<React.SetStateAction<boolean>>
+}
 
-export function InventoryView() {
+
+
+export function InventoryView({ manualModalOpen, setManualModalOpen }: InventoryViewProps) {
+
   const router = useRouter()
-  const [products, setProducts] = useState<ProductWithInventory[]>([])
-  const [Loading, setLoading] = useState(true)
-
-  const [entriesPerPage, setEntriesPerPage] = useState(10)
-  const [searchTerm, setSearchTerm] = useState("")
-  const [currentPage, setCurrentPage] = useState(1)
-  const [totalProducts, setTotalProducts] = useState(0)
-  const offset = (currentPage - 1) * entriesPerPage
 
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false)
   const [productToDelete, setProductToDelete] = useState<Product | null>(null)
@@ -55,72 +67,177 @@ export function InventoryView() {
   const [selectedBranch, setSelectedBranch] = useState("all")
 
 
-  const start = totalProducts === 0 ? 0 : (currentPage - 1) * entriesPerPage + 1
+  // --- 📦 Estados del modal manual ---
+  const [productCode, setProductCode] = useState("")
+  const [quantity, setQuantity] = useState("")
+  const [isSubmitting, setIsSubmitting] = useState(false)
+
+  // --- 📦 Estados del inventario ---
+  const [shouldReload, setShouldReload] = useState(false)
+  const [products, setProducts] = useState<ProductWithInventory[]>([])
+  const [totalProducts, setTotalProducts] = useState(0)
+  const [branches, setBranches] = useState<Branch[]>([])
+  const [loading, setLoading] = useState(true)
+
+  // --- 🔍 Filtros y paginación ---
+  const [searchTerm, setSearchTerm] = useState("")
+  const [entriesPerPage, setEntriesPerPage] = useState(10)
+  const [currentPage, setCurrentPage] = useState(1)
+  const offset = (currentPage - 1) * entriesPerPage
+
+  // --- 🔢 Rangos de paginación ---
+  const start = totalProducts === 0 ? 0 : offset + 1
   const end = Math.min(currentPage * entriesPerPage, totalProducts)
 
-  const [branches, setBranches] = useState<Branch[]>([])
+  // --- 📍 Referencias ---
+  const productCodeRef = useRef<HTMLInputElement | null>(null)
 
 
-  // --- 🟢 Cargar inventario cada vez que cambian filtros/paginación ---
+
+  // =====================================================
+  // 🧩 HANDLERS
+  // =====================================================
+
+  const handleManualSubmit = (e: React.FormEvent) => {
+    e.preventDefault()
+    if (!productCode || !quantity) {
+      toast.error("Por favor completa todos los campos")
+      return
+    }
+    setIsSubmitting(true)
+  }
+
+  // =====================================================
+  // 🚀 FUNCIONES ASÍNCRONAS
+  // =====================================================
+
+  const agregarProductoManual = async () => {
+    try {
+      setIsSubmitting(true)
+
+      // 📨 Enviar datos al endpoint
+      const res = await fetch("/api/inventory/carga-manual", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          codigo: productCode,
+          cantidad: quantity,
+        }),
+      })
+
+      const data = await res.json()
+
+      if (!res.ok) {
+        throw new Error(data.error || "Error al agregar el producto")
+      }
+
+      // ✅ Éxito
+      toast.success("Producto agregado exitosamente.", {
+        description: `Código: ${productCode} | Cantidad: ${quantity}`,
+      })
+
+      // 🧹 Limpieza sin cerrar modal
+      setProductCode("")
+      setQuantity("")
+
+      // 🔄 Forzar recarga del inventario
+      setShouldReload(true)
+
+      // 🔁 Enfocar input principal
+      setTimeout(() => productCodeRef.current?.focus(), 50)
+    } catch (error: any) {
+      toast.error("Error al agregar el producto.", {
+        description: error.message || "Por favor intenta nuevamente.",
+      })
+    } finally {
+      setIsSubmitting(false)
+    }
+  }
+
+
+  const cargarInventario = async (signal: AbortSignal) => {
+    setLoading(true)
+    try {
+      const res = await fetch(
+        `/api/inventory?searchTerm=${encodeURIComponent(searchTerm)}&limit=${entriesPerPage}&offset=${offset}`,
+        { signal }
+      )
+      if (!res.ok) throw new Error("Error cargando inventario")
+
+      const { data, total } = await res.json()
+
+      const mapped = data
+        .filter((item: any) => item.product)
+        .map((item: any) => ({
+          ...item.product!,
+          cantidad: item.cantidad,
+          branch: item.branch || { name: "", address: "" },
+        }))
+
+      setProducts(mapped)
+      setTotalProducts(total)
+    } catch (err: any) {
+      if (err.name !== "AbortError") {
+        console.error("❌ Error cargando inventario:", err)
+        setProducts([])
+        setTotalProducts(0)
+      }
+    } finally {
+      if (!signal.aborted) setLoading(false)
+    }
+  }
+
+  const cargarSucursales = async () => {
+    try {
+      const res = await fetch("/api/branches")
+      if (!res.ok) throw new Error("Error cargando sucursales")
+      const data = await res.json()
+      setBranches(data)
+    } catch (err) {
+      console.error("❌ Error cargando sucursales:", err)
+      setBranches([])
+    }
+  }
+
+
+  // =====================================================
+  // 🧠 EFECTOS
+  // =====================================================
+
+  // 1️⃣ Efecto: manejar envío manual
+  useEffect(() => {
+    if (isSubmitting) agregarProductoManual()
+  }, [isSubmitting])
+
+  // 2️⃣ Efecto: cargar inventario
   useEffect(() => {
     const controller = new AbortController()
-    const signal = controller.signal
-
-    const cargarInventario = async () => {
-      setLoading(true)
-      try {
-        const res = await fetch(
-          `/api/inventory?searchTerm=${encodeURIComponent(searchTerm)}&limit=${entriesPerPage}&offset=${offset}`,
-          { signal }
-        )
-        if (!res.ok) throw new Error("Error cargando inventario")
-
-        const data = await res.json()
-        const newInventory = data.data
-        const total = data.total
-
-        const mappedProducts: ProductWithInventory[] = newInventory
-          .filter((item: any) => item.product)
-          .map((item: any) => ({
-            ...item.product!,
-            cantidad: item.cantidad,
-            branch: item.branch || { name: "", address: "" },
-          }))
-
-        setProducts(mappedProducts)
-        setTotalProducts(total)
-      } catch (err: any) {
-        if (err.name !== "AbortError") {
-          console.error("❌ Error cargando inventario:", err)
-          setProducts([])
-          setTotalProducts(0)
-        }
-      } finally {
-        if (!signal.aborted) setLoading(false)
-      }
-    }
-
-    cargarInventario()
+    cargarInventario(controller.signal)
+    if (shouldReload) setShouldReload(false)
     return () => controller.abort()
-  }, [searchTerm, entriesPerPage, offset])
+  }, [searchTerm, entriesPerPage, offset, shouldReload])
 
-  // --- 🟡 Cargar sucursales solo una vez ---
+  // 3️⃣ Efecto: cargar sucursales una vez
   useEffect(() => {
-    const cargarSucursales = async () => {
-      try {
-        const res = await fetch("/api/branches")
-        if (!res.ok) throw new Error("Error cargando sucursales")
-
-        const data = await res.json()
-        setBranches(data)
-      } catch (err) {
-        console.error("❌ Error cargando sucursales:", err)
-        setBranches([])
-      }
-    }
-
     cargarSucursales()
   }, [])
+
+  useEffect(() => {
+    if (manualModalOpen) {
+      setTimeout(() => {
+        const input = productCodeRef.current
+        if (input) {
+          input.focus()
+          const length = input.value.length
+          input.setSelectionRange(length, length) // 👈 coloca el cursor al final
+        }
+      }, 100)
+    }
+  }, [manualModalOpen])
+
+
 
 
 
@@ -186,7 +303,7 @@ export function InventoryView() {
       </div>
 
       {/* Contenido */}
-      {Loading ? (
+      {loading ? (
         <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 gap-2 sm:gap-3">
           {Array.from({ length: entriesPerPage }).map((_, index) => (
             <Card key={index} className="overflow-hidden">
@@ -296,24 +413,32 @@ export function InventoryView() {
                       <div className="pr-1.5 sm:pr-2">
                         <p className="text-[8px] sm:text-[9px] text-muted-foreground mb-0.5">Distribuidor</p>
                         <p className="text-xs sm:text-sm font-bold text-primary">
-                          ${product.precioDistribuidorConIVA.toFixed(2)}
+                          {Number.isFinite(Number(product.precioDistribuidorConIVA)) &&
+                            String(product.precioDistribuidorConIVA) !== "*"
+                            ? `$${Number(product.precioDistribuidorConIVA).toFixed(2)}`
+                            : ""}
                         </p>
+
                       </div>
                       <div className="px-1.5 sm:px-2">
                         <p className="text-[8px] sm:text-[9px] text-muted-foreground mb-0.5">Publico</p>
                         <p className="text-xs sm:text-sm font-bold text-primary">
-                          {Number(product.precioPublicoConIVA)
+                          {Number.isFinite(Number(product.precioPublicoConIVA)) &&
+                            String(product.precioPublicoConIVA) !== "*"
                             ? Number(product.precioPublicoConIVA).toFixed(2)
                             : product.precioPublicoConIVA}
                         </p>
+
                       </div>
                       <div className="pl-1.5 sm:pl-2">
                         <p className="text-[8px] sm:text-[9px] text-muted-foreground mb-0.5">Mayoreo</p>
                         <p className="text-xs sm:text-sm font-bold text-primary">
-                          {Number(product.precioMayoreoConIVA)
+                          {Number.isFinite(Number(product.precioMayoreoConIVA)) &&
+                            String(product.precioMayoreoConIVA) !== "*"
                             ? Number(product.precioMayoreoConIVA).toFixed(2)
                             : product.precioMayoreoConIVA}
                         </p>
+
                       </div>
                     </div>
                   </div>
@@ -406,6 +531,51 @@ export function InventoryView() {
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
+
+      <Dialog open={manualModalOpen} onOpenChange={setManualModalOpen}>
+        <DialogContent className="sm:max-w-[425px]">
+          <DialogHeader>
+            <DialogTitle>Gestión Manual</DialogTitle>
+            <DialogDescription>
+              Ingresa el código del producto y la cantidad para agregar al inventario.
+            </DialogDescription>
+          </DialogHeader>
+          <form onSubmit={handleManualSubmit}>
+            <div className="grid gap-4 py-4">
+              <div className="grid gap-2">
+                <Label htmlFor="productCode">Código del producto</Label>
+                <Input
+                  ref={productCodeRef} // 🟢 referencia
+                  id="productCode"
+                  value={productCode}
+                  onChange={(e) => setProductCode(e.target.value)}
+                  placeholder="Ingresa el código"
+                  disabled={isSubmitting}
+                />
+              </div>
+              <div className="grid gap-2">
+                <Label htmlFor="quantity">Cantidad</Label>
+                <Input
+                  id="quantity"
+                  type="number"
+                  value={quantity}
+                  onChange={(e) => setQuantity(e.target.value)}
+                  placeholder="Ingresa la cantidad"
+                  disabled={isSubmitting}
+                  min="1"
+                />
+              </div>
+            </div>
+            <DialogFooter>
+              <Button type="submit" disabled={isSubmitting}>
+                {isSubmitting ? "Agregando..." : "Agregar"}
+              </Button>
+            </DialogFooter>
+          </form>
+        </DialogContent>
+      </Dialog>
+
+
     </div>
   )
 }

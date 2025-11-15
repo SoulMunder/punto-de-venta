@@ -1,12 +1,9 @@
 import { NextResponse } from "next/server"
-import { MongoClient } from "mongodb"
-
-// --- Conexión a MongoDB ---
-const client = new MongoClient(process.env.MONGODB_URI!)
+import { clientPromise } from "@/lib/mongo" // <-- conexión global reutilizable
 
 export async function GET() {
   try {
-    await client.connect()
+    const client = await clientPromise
     const db = client.db("punto-venta-trupper-system")
     const collection = db.collection("branches") // colección branches
 
@@ -22,9 +19,7 @@ export async function GET() {
 
     return NextResponse.json(formatted)
   } catch (error) {
-    console.error("Error al obtener branches:", error)
+    console.error("❌ Error al obtener branches:", error)
     return NextResponse.json({ error: "Error al obtener branches" }, { status: 500 })
-  } finally {
-    await client.close()
   }
 }

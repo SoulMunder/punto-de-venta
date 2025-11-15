@@ -98,8 +98,12 @@ export function ProductDetailsModal({ product, open, onOpenChange }: ProductDeta
                   </CardHeader>
                   <CardContent className="p-3 sm:p-4 pt-0">
                     <p className="text-base sm:text-lg font-bold text-primary">
-                      ${product.precioDistribuidorConIVA ? product.precioDistribuidorConIVA.toFixed(2) : "N/A"}
+                      {Number.isFinite(Number(product.precioDistribuidorConIVA)) &&
+                        String(product.precioDistribuidorConIVA) !== "*"
+                        ? `$${Number(product.precioDistribuidorConIVA).toFixed(2)}`
+                        : "Sin definir"}
                     </p>
+
                   </CardContent>
                 </Card>
 
@@ -109,8 +113,12 @@ export function ProductDetailsModal({ product, open, onOpenChange }: ProductDeta
                   </CardHeader>
                   <CardContent className="p-3 sm:p-4 pt-0">
                     <p className="text-base sm:text-lg font-bold text-primary">
-                      ${product.precioPublicoConIVA ? product.precioPublicoConIVA.toFixed(2) : "N/A"}
+                      {Number.isFinite(Number(product.precioPublicoConIVA)) &&
+                        String(product.precioPublicoConIVA) !== "*"
+                        ? `$${Number(product.precioPublicoConIVA).toFixed(2)}`
+                        : "Sin definir"}
                     </p>
+
                   </CardContent>
                 </Card>
 
@@ -120,8 +128,12 @@ export function ProductDetailsModal({ product, open, onOpenChange }: ProductDeta
                   </CardHeader>
                   <CardContent className="p-3 sm:p-4 pt-0">
                     <p className="text-base sm:text-lg font-bold text-primary">
-                      ${product.precioMayoreoConIVA ? product.precioMayoreoConIVA.toFixed(2) : "N/A"}
+                      {Number.isFinite(Number(product.precioMayoreoConIVA)) &&
+                        String(product.precioMayoreoConIVA) !== "*"
+                        ? `$${Number(product.precioMayoreoConIVA).toFixed(2)}`
+                        : "Sin definir"}
                     </p>
+
                   </CardContent>
                 </Card>
               </div>

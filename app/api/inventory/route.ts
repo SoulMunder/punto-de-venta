@@ -1,20 +1,5 @@
 import { NextResponse } from "next/server"
-import { MongoClient } from "mongodb"
-
-const uri = process.env.MONGODB_URI!
-if (!uri) throw new Error("⚠️ Faltan variables de entorno para MongoDB")
-
-// 🔹 Reutilizamos un solo cliente global (no se cierra nunca)
-const globalForMongo = global as unknown as { _mongoClientPromise?: Promise<MongoClient> }
-
-let clientPromise: Promise<MongoClient>
-
-if (!globalForMongo._mongoClientPromise) {
-  const client = new MongoClient(uri)
-  globalForMongo._mongoClientPromise = client.connect()
-}
-
-clientPromise = globalForMongo._mongoClientPromise
+import { clientPromise } from "@/lib/mongo" // <-- conexión persistente global
 
 export async function GET(request: Request) {
   try {

@@ -1,20 +1,7 @@
 import { NextResponse } from "next/server"
-import { MongoClient } from "mongodb"
+import { clientPromise } from "@/lib/mongo" // <-- conexión persistente
 
-const uri = process.env.MONGODB_URI!
-if (!uri) throw new Error("❌ Faltan variables de entorno: MONGODB_URI")
-
-// 🧠 Reutilizar conexión global (para evitar MongoClientClosedError)
-let client: MongoClient
-let clientPromise: Promise<MongoClient>
-
-if (!(global as any)._mongoClientPromise) {
-  client = new MongoClient(uri)
-  ;(global as any)._mongoClientPromise = client.connect()
-}
-
-clientPromise = (global as any)._mongoClientPromise
-
+// ---------------- GET ----------------
 export async function GET() {
   try {
     const client = await clientPromise
@@ -36,6 +23,7 @@ export async function GET() {
   }
 }
 
+// ---------------- POST ----------------
 export async function POST(req: Request) {
   try {
     const client = await clientPromise

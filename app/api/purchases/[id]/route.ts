@@ -1,20 +1,19 @@
 import { NextResponse } from "next/server";
-import { MongoClient, ObjectId } from "mongodb";
+import { ObjectId } from "mongodb";
+import { clientPromise } from "@/lib/mongo"; // conexión persistente
 
-const uri = process.env.MONGODB_URI || "mongodb://localhost:27017";
-const client = new MongoClient(uri);
 const dbName = process.env.SYSTEM_COLLECTION_NAME;
 const trupperDbName = process.env.TRUPPER_DB_NAME;
 
 export async function GET(req: Request, { params }: { params: { id: string } }) {
   try {
-    await client.connect();
+    const client = await clientPromise;
     const db = client.db(dbName);
     const trupperDb = client.db(trupperDbName);
 
     const purchasesCol = db.collection("purchases");
     const itemsCol = db.collection("purchaseItems");
-    const productsCol = trupperDb.collection("products"); // <-- otra DB
+    const productsCol = trupperDb.collection("products"); // otra DB
 
     const purchaseId = params.id;
     if (!purchaseId) {
@@ -77,7 +76,5 @@ export async function GET(req: Request, { params }: { params: { id: string } }) 
   } catch (error: any) {
     console.error("❌ Error al obtener la compra:", error);
     return NextResponse.json({ error: "Error al obtener la compra" }, { status: 500 });
-  } finally {
-    await client.close();
   }
 }

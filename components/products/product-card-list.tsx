@@ -281,26 +281,32 @@ export function ProductCardList() {
                     <div className="pr-1.5 sm:pr-2">
                       <p className="text-[8px] sm:text-[9px] text-muted-foreground mb-0.5">Distribuidor</p>
                       <p className="text-xs sm:text-sm font-bold text-primary">
-                        {product.precioDistribuidorConIVA !== null
-                          ? product.precioDistribuidorConIVA.toFixed(2)
+                        {Number.isFinite(Number(product.precioDistribuidorConIVA)) &&
+                          String(product.precioDistribuidorConIVA) !== "*"
+                          ? Number(product.precioDistribuidorConIVA).toFixed(2)
                           : ""}
                       </p>
+
                     </div>
                     <div className="px-1.5 sm:px-2">
                       <p className="text-[8px] sm:text-[9px] text-muted-foreground mb-0.5">Publico</p>
                       <p className="text-xs sm:text-sm font-bold text-primary">
-                        {product.precioPublicoConIVA !== null
-                          ? product.precioPublicoConIVA.toFixed(2)
+                        {Number.isFinite(Number(product.precioPublicoConIVA)) &&
+                          String(product.precioPublicoConIVA) !== "*"
+                          ? Number(product.precioPublicoConIVA).toFixed(2)
                           : ""}
                       </p>
+
                     </div>
                     <div className="pl-1.5 sm:pl-2">
                       <p className="text-[8px] sm:text-[9px] text-muted-foreground mb-0.5">Mayoreo</p>
                       <p className="text-xs sm:text-sm font-bold text-primary">
-                        {product.precioMayoreoConIVA !== null
-                          ? product.precioMayoreoConIVA.toFixed(2)
+                        {Number.isFinite(Number(product.precioMayoreoConIVA)) &&
+                          String(product.precioMayoreoConIVA) !== "*"
+                          ? Number(product.precioMayoreoConIVA).toFixed(2)
                           : ""}
                       </p>
+
                     </div>
                   </div>
                 </div>

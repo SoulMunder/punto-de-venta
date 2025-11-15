@@ -1,53 +1,35 @@
-import { redirect } from "next/navigation"
-// import { createClient } from "@/lib/supabase/server"
-// import { createClient } from "@/lib/supabase/server"
-import { InventoryView } from "@/components/inventory/inventory-view"
+"use client"
+
+import { useState } from "react"
 import Link from "next/link"
 import { Button } from "@/components/ui/button"
-import { ArrowLeftRight, History } from "lucide-react"
+import { ArrowLeftRight, History, Plus } from "lucide-react"
+import { InventoryView } from "@/components/inventory/inventory-view"
 
-export default async function InventoryPage() {
-  // const supabase = await createClient()
-  // const {
-  //   data: { user },
-  //   error,
-  // } = await supabase.auth.getUser()
-  // const supabase = await createClient()
-  // const {
-  //   data: { user },
-  //   error,
-  // } = await supabase.auth.getUser()
-
-  // if (error || !user) {
-  //   redirect("/auth/login")
-  // }
-  // if (error || !user) {
-  //   redirect("/auth/login")
-  // }
-
-  // // Check if user has permission
-  // const { data: profile } = await supabase.from("profiles").select("*").eq("id", user.id).single()
-  // // Check if user has permission
-  // const { data: profile } = await supabase.from("profiles").select("*").eq("id", user.id).single()
-
-  // if (!profile) {
-  //   redirect("/")
-  // }
-  // if (!profile) {
-  //   redirect("/")
-  // }
-
-  // // Get branches
-  // const { data: branches } = await supabase.from("branches").select("*").order("name")
-  // // Get branches
-  // const { data: branches } = await supabase.from("branches").select("*").order("name")
+export default function InventoryPage() {
+  const [manualModalOpen, setManualModalOpen] = useState(false)
 
   return (
     <div className="flex min-h-screen flex-col">
+      {/* 🧭 Encabezado */}
       <header className="border-b bg-white">
         <div className="container mx-auto flex h-16 items-center justify-between px-4">
           <h1 className="text-xl font-semibold">Inventario por Sucursal</h1>
+
           <div className="flex items-center gap-2">
+            {/* 🟢 Botón Gestión Manual */}
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => setManualModalOpen(true)}
+              className="gap-2 bg-transparent"
+            >
+              <Plus className="h-4 w-4" />
+              <span className="hidden sm:inline">Gestión Manual</span>
+              <span className="sm:hidden">Manual</span>
+            </Button>
+
+            {/* 🟡 Botón Historial */}
             <Link href="/admin/inventory/movements">
               <Button variant="outline" size="sm" className="gap-2 bg-transparent">
                 <History className="h-4 w-4" />
@@ -55,6 +37,8 @@ export default async function InventoryPage() {
                 <span className="sm:hidden">Historial</span>
               </Button>
             </Link>
+
+            {/* 🟠 Botón Trasladar */}
             <Link href="/admin/inventory/transfer">
               <Button size="sm" className="gap-2">
                 <ArrowLeftRight className="h-4 w-4" />
@@ -65,9 +49,13 @@ export default async function InventoryPage() {
           </div>
         </div>
       </header>
+
+      {/* 📦 Contenido principal */}
       <main className="flex-1 container mx-auto p-6">
-        {/* <InventoryView branches={branches || []} /> */}
-        <InventoryView/>
+        <InventoryView
+          manualModalOpen={manualModalOpen}
+          setManualModalOpen={setManualModalOpen}
+        />
       </main>
     </div>
   )

@@ -1,6 +1,8 @@
 import { NextResponse } from "next/server";
 import { MongoClient, ObjectId } from "mongodb";
 import * as XLSX from "xlsx";
+import { clientPromise, dbName } from "@/lib/mongo";
+
 
 // --- Funciones auxiliares ---
 function removeAccents(str: string) {
@@ -37,10 +39,6 @@ function parseExcelDate(value: any): Date | string {
   return isNaN(date.getTime()) ? value : new Date(Date.UTC(date.getFullYear(), date.getMonth(), date.getDate()));
 }
 
-const uri = process.env.MONGODB_URI || "mongodb://localhost:27017";
-const client = new MongoClient(uri);
-const dbName = process.env.SYSTEM_COLLECTION_NAME;
-
 // ---------------- POST ----------------
 export async function POST(request: Request) {
   try {
@@ -71,7 +69,8 @@ export async function POST(request: Request) {
         { status: 400 }
       );
 
-    await client.connect();
+    // --- Conexión persistente ---
+    const client = await clientPromise;
     const db = client.db(dbName);
     const purchasesCol = db.collection("purchases");
     const itemsCol = db.collection("purchaseItems");
@@ -97,7 +96,6 @@ export async function POST(request: Request) {
       const rows = grouped[groupKey];
       const firstRow = rows[0];
 
-      // Ya no usamos branch para purchases ni purchaseItems
       const purchaseDoc: any = {
         createdBy: userName,
         fecha: parseExcelDate(firstRow.fecha),
@@ -124,32 +122,32 @@ export async function POST(request: Request) {
       if (purchaseItems.length > 0) {
         await itemsCol.insertMany(purchaseItems);
 
-        // --- Insertar en inventory con branch por fila ---
-        const inventoryDocs = await Promise.all(
-          purchaseItems.map(async (item, index) => {
-            const branchSearch = rows[index].sucursal?.toString().trim();
-            let branch: { name: string; address: string } | null = null;
+        for (const [index, item] of purchaseItems.entries()) {
+          const branchSearch = rows[index].sucursal?.toString().trim();
+          let branch: { name: string; address: string } | null = null;
 
-            if (branchSearch) {
-              const branchDoc = await branchesCol.findOne({
-                nombre: { $regex: `^${branchSearch}$`, $options: "i" },
-              });
-              if (branchDoc)
-                branch = { name: branchDoc.name, address: branchDoc.address };
-            }
+          if (branchSearch) {
+            const branchDoc = await branchesCol.findOne({
+              nombre: { $regex: `^${branchSearch}$`, $options: "i" },
+            });
+            if (branchDoc)
+              branch = { name: branchDoc.name, address: branchDoc.address };
+          }
 
-            return {
-              codigo: item.material,
-              cantidad: item.cantidad,
-              branch,
-              createdAt: new Date(),
-              updatedAt: new Date(),
-            };
-          })
-        );
-
-        if (inventoryDocs.length > 0) {
-          await inventoryCol.insertMany(inventoryDocs);
+          await inventoryCol.updateOne(
+            { codigo: item.material, "branch.name": branch?.name ?? null },
+            {
+              $inc: { cantidad: item.cantidad },
+              $set: {
+                updatedAt: new Date(),
+                branch: branch ?? null,
+              },
+              $setOnInsert: {
+                createdAt: new Date(),
+              },
+            },
+            { upsert: true }
+          );
         }
       }
     }
@@ -160,27 +158,22 @@ export async function POST(request: Request) {
   } catch (error: any) {
     console.error("❌ Error al procesar el archivo:", error);
     return NextResponse.json({ error: error.message }, { status: 500 });
-  } finally {
-    await client.close();
   }
+  // ❌ quitamos el client.close() porque la conexión es persistente
 }
 
 
 // ---------------- GET ----------------
 export async function GET() {
   try {
-    await client.connect();
+    const client = await clientPromise;
     const db = client.db(dbName);
     const purchasesCol = db.collection("purchases");
 
-    // Traer todas las compras sin ordenar
     const purchases = await purchasesCol.find({}).toArray();
-
     return NextResponse.json(purchases);
   } catch (error: any) {
-    console.error("❌ Error al obtener compras:", error);
+    console.error(error);
     return NextResponse.json({ error: error.message }, { status: 500 });
-  } finally {
-    await client.close();
   }
 }
