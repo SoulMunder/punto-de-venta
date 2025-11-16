@@ -67,7 +67,7 @@ export function InventoryView({
   const router = useRouter()
 
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false)
-  const [productToDelete, setProductToDelete] = useState<Product | null>(null)
+  const [productToDelete, setProductToDelete] = useState<ProductWithInventory | null>(null)
   const [detailsModalOpen, setDetailsModalOpen] = useState(false)
   const [selectedProduct, setSelectedProduct] = useState<Product | null>(null)
   const [selectedBranch, setSelectedBranch] = useState("all")
@@ -110,6 +110,7 @@ export function InventoryView({
   // =====================================================
   // 🧩 HANDLERS
   // =====================================================
+
 
   const handleManualSubmit = (e: React.FormEvent) => {
     e.preventDefault()
@@ -269,11 +270,51 @@ export function InventoryView({
 
 
   const handleDelete = async () => {
-    // Aquí iría tu lógica de delete
-    // setProducts(products.filter(p => p._id !== productToDelete._id))
-    setDeleteDialogOpen(false)
-    setProductToDelete(null)
-  }
+    if (!productToDelete) {
+      toast.error("No hay producto seleccionado");
+      return;
+    }
+
+    try {
+      setIsDeleting(true); // opcional: mostrar spinner
+
+      const res = await fetch("/api/inventory/delete-product", {
+        method: "DELETE",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          codigo: productToDelete.codigo,
+          branch: productToDelete.branch.name,
+        }),
+      });
+
+      // Manejar JSON solo si existe
+      let data: any = {};
+      try {
+        data = await res.json();
+      } catch {
+        data = {};
+      }
+
+      if (!res.ok) {
+        throw new Error(data.error || "Error eliminando producto");
+      }
+
+      toast.success(data.message || "Producto eliminado correctamente");
+
+      // Limpiar estados
+      setDeleteDialogOpen(false);
+      setProductToDelete(null);
+      setShouldReload(true); // recargar inventario
+    } catch (error: any) {
+      console.error("Error eliminando producto:", error);
+      toast.error("Error eliminando producto", {
+        description: error.message,
+      });
+    } finally {
+      setIsDeleting(false);
+    }
+  };
+
 
   const handleDeleteInventory = async () => {
     try {
@@ -581,15 +622,25 @@ export function InventoryView({
           </AlertDialogHeader>
           <AlertDialogFooter>
             <AlertDialogCancel>Cancelar</AlertDialogCancel>
-            <AlertDialogAction
+            <Button
               onClick={handleDelete}
-              className="bg-destructive hover:bg-destructive/90 text-destructive-foreground"
+              className="bg-destructive hover:bg-destructive/90 text-destructive-foreground flex items-center justify-center gap-2"
+              disabled={isDeleting} // Deshabilitar mientras se elimina
             >
-              Eliminar
-            </AlertDialogAction>
+              {isDeleting ? (
+                <>
+                  <span className="loader h-4 w-4 border-2 border-t-transparent border-white rounded-full animate-spin"></span>
+                  Eliminando...
+                </>
+              ) : (
+                "Eliminar"
+              )}
+            </Button>
           </AlertDialogFooter>
+
         </AlertDialogContent>
       </AlertDialog>
+
 
       <Dialog open={manualModalOpen} onOpenChange={setManualModalOpen}>
         <DialogContent className="sm:max-w-[425px]">
@@ -668,10 +719,18 @@ export function InventoryView({
             </div>
 
             <DialogFooter>
-              <Button type="submit" disabled={isSubmitting}>
-                {isSubmitting ? "Agregando..." : "Agregar"}
+              <Button type="submit" disabled={isSubmitting} className="flex items-center justify-center gap-2">
+                {isSubmitting ? (
+                  <>
+                    <span className="loader h-4 w-4 border-2 border-t-transparent border-white rounded-full animate-spin"></span>
+                    Agregando...
+                  </>
+                ) : (
+                  "Agregar"
+                )}
               </Button>
             </DialogFooter>
+
           </form>
         </DialogContent>
       </Dialog>

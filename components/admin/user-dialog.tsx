@@ -41,26 +41,25 @@ const userSchema = z.object({
 // Esquema para crear un usuario (la contraseña es requerida)
 const createUserSchema = userSchema.extend({
   password: z.string()
-    .min(8, "La contraseña debe tener al menos 8 caracteres")
-    .regex(/[a-z]/, "La contraseña debe contener al menos una letra minúscula")
-    .regex(/[A-Z]/, "La contraseña debe contener al menos una letra mayúscula")
-    .regex(/\d/, "La contraseña debe contener al menos un número")
-    .regex(/[^A-Za-z0-9]/, "La contraseña debe contener al menos un carácter especial")
-    .regex(/^\S+$/, "La contraseña no debe contener espacios")
-    .max(20,"La contraseña debe tener máximo 20 caracteres"),
+    .min(2, "La contraseña debe tener al menos 2 caracteres")
+    //.regex(/[a-z]/, "La contraseña debe contener al menos una letra minúscula")
+    //.regex(/[A-Z]/, "La contraseña debe contener al menos una letra mayúscula")
+    //.regex(/\d/, "La contraseña debe contener al menos un número")
+    //.regex(/[^A-Za-z0-9]/, "La contraseña debe contener al menos un carácter especial")
+    //.regex(/^\S+$/, "La contraseña no debe contener espacios")
+    //.max(20,"La contraseña debe tener máximo 20 caracteres"),
 })
 
-// Para la actualización, si la contraseña está vacía, no la validamos. Si no está vacía, aplicamos las reglas.
+// Para la actualización, si la contraseña está vacía, no la validamos. Si no está vacía, aplicamos las reglas
 const updateUserSchema = userSchema.extend({
   password: z.string().optional().refine((pass) => {
-      // Si el campo de contraseña está vacío o no se proporciona, es válido.
-      if (!pass) return true;
-      // Si hay algo escrito, debe cumplir con las reglas.
-      return createUserSchema.shape.password.safeParse(pass).success;
-    }, {
-      // Mensaje de error personalizado si la validación del refine falla
-      message: "La contraseña no cumple con los requisitos de seguridad (mínimo 8 caracteres, mayúscula, minúscula, número y símbolo)."
-    })
+    // Si el campo de contraseña está vacío o no se proporciona, es válido
+    if (!pass) return true;
+    // Si hay algo escrito, debe cumplir con las reglas de createUserSchema
+    return createUserSchema.shape.password.safeParse(pass).success;
+  }, {
+    message: "La contraseña no cumple con los requisitos de seguridad (mínimo 2 caracteres)"
+  })
 })
 
 interface UserDialogProps {
