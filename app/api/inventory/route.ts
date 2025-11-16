@@ -6,10 +6,10 @@ export async function GET(request: Request) {
     const { searchParams } = new URL(request.url)
     const limit = parseInt(searchParams.get("limit") || "10")
     const offset = parseInt(searchParams.get("offset") || "0")
-    const searchTerm = searchParams.get("searchTerm")?.trim() || ""
+    const rawSearch = searchParams.get("searchTerm") || ""
+    const decodedSearch = decodeURIComponent(rawSearch).trim()
 
     const client = await clientPromise
-
     const inventoryDb = client.db(process.env.SYSTEM_COLLECTION_NAME)
     const trupperDb = client.db(process.env.TRUPPER_DB_NAME)
 
@@ -17,29 +17,31 @@ export async function GET(request: Request) {
     const productsCollection = trupperDb.collection("products")
 
     // --- Filtro de búsqueda ---
-    const productFilter =
-      searchTerm.length > 0
-        ? {
-            $or: [
-              { codigo: { $regex: searchTerm, $options: "i" } },
-              { descripcion: { $regex: searchTerm, $options: "i" } },
-            ],
-          }
-        : {}
+    const filtro: any = {}
+    if (decodedSearch) {
+      const safeRegex = new RegExp(decodedSearch.replace(/[.*+?^${}()|[\]\\]/g, "\\$&"), "i")
+
+      filtro.$or = [
+        { descripcion: { $regex: safeRegex } },          // búsqueda en descripcion
+        { ean: { $regex: safeRegex } },                  // búsqueda en ean
+        { codigo: { $eq: Number(decodedSearch) } },      // búsqueda exacta si es número
+        { codigo: { $regex: safeRegex.toString() } }     // fallback (solo si código fuera string)
+      ]
+    }
 
     // 1️⃣ Obtener productos filtrados
     const filteredProductCodes =
-      searchTerm.length > 0
+      decodedSearch.length > 0
         ? (
             await productsCollection
-              .find(productFilter, { projection: { codigo: 1 } })
+              .find(filtro, { projection: { codigo: 1 } })
               .toArray()
           ).map((p) => p.codigo)
         : []
 
     // 2️⃣ Filtro de inventario
     const inventoryFilter =
-      searchTerm.length > 0 ? { codigo: { $in: filteredProductCodes } } : {}
+      decodedSearch.length > 0 ? { codigo: { $in: filteredProductCodes } } : {}
 
     // 3️⃣ Total
     const total = await inventoryCollection.countDocuments(inventoryFilter)
@@ -70,5 +72,24 @@ export async function GET(request: Request) {
   } catch (error) {
     console.error("❌ Error al obtener inventario:", error)
     return NextResponse.json({ error: "Error al obtener inventario" }, { status: 500 })
+  }
+}
+
+
+export async function DELETE() {
+  try {
+    const client = await clientPromise
+    const inventoryDb = client.db(process.env.SYSTEM_COLLECTION_NAME)
+    const inventoryCollection = inventoryDb.collection("inventory")
+
+    // ⚠️ Elimina todos los documentos del inventario
+    const result = await inventoryCollection.deleteMany({})
+
+    return NextResponse.json({
+      message: `Inventario eliminado correctamente`
+    })
+  } catch (error) {
+    console.error("❌ Error al eliminar inventario:", error)
+    return NextResponse.json({ error: "Error al eliminar inventario" }, { status: 500 })
   }
 }

@@ -52,11 +52,17 @@ interface ProductWithInventory extends Product {
 interface InventoryViewProps {
   manualModalOpen: boolean
   setManualModalOpen: React.Dispatch<React.SetStateAction<boolean>>
+  deleteInventoryModalOpen: boolean
+  setDeleteInventoryModalOpen: React.Dispatch<React.SetStateAction<boolean>>
 }
 
 
-
-export function InventoryView({ manualModalOpen, setManualModalOpen }: InventoryViewProps) {
+export function InventoryView({
+  manualModalOpen,
+  setManualModalOpen,
+  deleteInventoryModalOpen,
+  setDeleteInventoryModalOpen,
+}: InventoryViewProps) {
 
   const router = useRouter()
 
@@ -70,7 +76,10 @@ export function InventoryView({ manualModalOpen, setManualModalOpen }: Inventory
   // --- 📦 Estados del modal manual ---
   const [productCode, setProductCode] = useState("")
   const [quantity, setQuantity] = useState("")
+  const [selectedBranchManual, setSelectedBranchManual] = useState<Branch | null>(null)
+
   const [isSubmitting, setIsSubmitting] = useState(false)
+
 
   // --- 📦 Estados del inventario ---
   const [shouldReload, setShouldReload] = useState(false)
@@ -78,6 +87,11 @@ export function InventoryView({ manualModalOpen, setManualModalOpen }: Inventory
   const [totalProducts, setTotalProducts] = useState(0)
   const [branches, setBranches] = useState<Branch[]>([])
   const [loading, setLoading] = useState(true)
+  const [loadingBranches, setLoadingBranches] = useState(true)
+  // Estado para indicar si se está eliminando
+  const [isDeleting, setIsDeleting] = useState(false);
+
+
 
   // --- 🔍 Filtros y paginación ---
   const [searchTerm, setSearchTerm] = useState("")
@@ -93,14 +107,13 @@ export function InventoryView({ manualModalOpen, setManualModalOpen }: Inventory
   const productCodeRef = useRef<HTMLInputElement | null>(null)
 
 
-
   // =====================================================
   // 🧩 HANDLERS
   // =====================================================
 
   const handleManualSubmit = (e: React.FormEvent) => {
     e.preventDefault()
-    if (!productCode || !quantity) {
+    if (!productCode || !quantity || !selectedBranchManual) {
       toast.error("Por favor completa todos los campos")
       return
     }
@@ -121,10 +134,15 @@ export function InventoryView({ manualModalOpen, setManualModalOpen }: Inventory
         headers: {
           "Content-Type": "application/json",
         },
+        // body que envías desde el frontend
         body: JSON.stringify({
           codigo: productCode,
           cantidad: quantity,
-        }),
+          branch: {
+            name: selectedBranchManual?.name,
+            address: selectedBranchManual?.address,
+          }
+        })
       })
 
       const data = await res.json()
@@ -135,7 +153,7 @@ export function InventoryView({ manualModalOpen, setManualModalOpen }: Inventory
 
       // ✅ Éxito
       toast.success("Producto agregado exitosamente.", {
-        description: `Código: ${productCode} | Cantidad: ${quantity}`,
+        description: `Código: ${productCode} | Cantidad: ${quantity} | Sucursal: ${selectedBranchManual?.name}`,
       })
 
       // 🧹 Limpieza sin cerrar modal
@@ -189,17 +207,24 @@ export function InventoryView({ manualModalOpen, setManualModalOpen }: Inventory
     }
   }
 
+  // 2. Modificar la función cargarSucursales
   const cargarSucursales = async () => {
+    setLoadingBranches(true) // 🔄 Iniciar carga
     try {
       const res = await fetch("/api/branches")
       if (!res.ok) throw new Error("Error cargando sucursales")
-      const data = await res.json()
+      const data: Branch[] = await res.json()
       setBranches(data)
+
+
     } catch (err) {
       console.error("❌ Error cargando sucursales:", err)
       setBranches([])
+    } finally {
+      setLoadingBranches(false) // ✅ Finalizar carga
     }
   }
+
 
 
   // =====================================================
@@ -226,19 +251,21 @@ export function InventoryView({ manualModalOpen, setManualModalOpen }: Inventory
 
   useEffect(() => {
     if (manualModalOpen) {
+      // 🟢 Si las sucursales ya están cargadas y no hay una seleccionada, seleccionar la primera
+      if (!loadingBranches && branches.length > 0 && !selectedBranchManual) {
+        setSelectedBranchManual(branches[0])
+      }
+
       setTimeout(() => {
         const input = productCodeRef.current
         if (input) {
           input.focus()
           const length = input.value.length
-          input.setSelectionRange(length, length) // 👈 coloca el cursor al final
+          input.setSelectionRange(length, length)
         }
       }, 100)
     }
-  }, [manualModalOpen])
-
-
-
+  }, [manualModalOpen, loadingBranches, branches, selectedBranchManual])
 
 
   const handleDelete = async () => {
@@ -247,6 +274,38 @@ export function InventoryView({ manualModalOpen, setManualModalOpen }: Inventory
     setDeleteDialogOpen(false)
     setProductToDelete(null)
   }
+
+  const handleDeleteInventory = async () => {
+    try {
+      setIsDeleting(true); // inicia cargando
+
+      // Llamada al endpoint DELETE
+      const res = await fetch("/api/inventory", {
+        method: "DELETE",
+      });
+
+      if (!res.ok) {
+        const data = await res.json();
+        throw new Error(data.error || "Error al eliminar inventario");
+      }
+
+      const data = await res.json();
+      toast.success(data.message || "Inventario eliminado correctamente");
+
+      // Cerrar modal
+      setDeleteInventoryModalOpen(false);
+
+      // Recargar la lista de inventario
+      setShouldReload(true);
+    } catch (error: any) {
+      toast.error("Error eliminando inventario", {
+        description: error.message,
+      });
+    } finally {
+      setIsDeleting(false); // termina cargando
+    }
+  };
+
 
   const handleViewDetails = (product: Product) => {
     setSelectedProduct(product)
@@ -396,9 +455,9 @@ export function InventoryView({ manualModalOpen, setManualModalOpen }: Inventory
                   </div>
 
                   <div className="flex gap-1.5 sm:gap-2 text-[9px] sm:text-[10px] text-muted-foreground">
-                    {product.clave && (
+                    {product.codigo && (
                       <p className="truncate flex-1">
-                        <span className="font-medium">Clave:</span> {product.clave}
+                        <span className="font-medium">Codigo:</span> {product.codigo}
                       </p>
                     )}
                     {product.ean && (
@@ -536,12 +595,11 @@ export function InventoryView({ manualModalOpen, setManualModalOpen }: Inventory
         <DialogContent className="sm:max-w-[425px]">
           <DialogHeader>
             <DialogTitle>Gestión Manual</DialogTitle>
-            <DialogDescription>
-              Ingresa el código del producto y la cantidad para agregar al inventario.
-            </DialogDescription>
+
           </DialogHeader>
           <form onSubmit={handleManualSubmit}>
             <div className="grid gap-4 py-4">
+              {/* Código del producto */}
               <div className="grid gap-2">
                 <Label htmlFor="productCode">Código del producto</Label>
                 <Input
@@ -553,6 +611,8 @@ export function InventoryView({ manualModalOpen, setManualModalOpen }: Inventory
                   disabled={isSubmitting}
                 />
               </div>
+
+              {/* Cantidad */}
               <div className="grid gap-2">
                 <Label htmlFor="quantity">Cantidad</Label>
                 <Input
@@ -565,7 +625,48 @@ export function InventoryView({ manualModalOpen, setManualModalOpen }: Inventory
                   min="1"
                 />
               </div>
+
+              {/* Sucursal */}
+              <div className="grid gap-2">
+                <Label htmlFor="branch">Sucursal</Label>
+                <Select
+                  value={selectedBranchManual?.name || ""}
+                  onValueChange={(name) => {
+                    const branch = branches.find((b) => b.name === name) || null
+                    setSelectedBranchManual(branch)
+                  }}
+                  disabled={isSubmitting || loadingBranches} // 🔄 Deshabilitar mientras carga
+                >
+                  <SelectTrigger id="branch" className="w-full">
+                    <SelectValue
+                      placeholder={
+                        loadingBranches
+                          ? "Cargando sucursales..."
+                          : "Selecciona una sucursal"
+                      }
+                    />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {loadingBranches ? (
+                      <SelectItem value="loading" disabled>
+                        Cargando...
+                      </SelectItem>
+                    ) : branches.length === 0 ? (
+                      <SelectItem value="empty" disabled>
+                        No hay sucursales disponibles
+                      </SelectItem>
+                    ) : (
+                      branches.map((branch) => (
+                        <SelectItem key={branch.name} value={branch.name}>
+                          {branch.name}
+                        </SelectItem>
+                      ))
+                    )}
+                  </SelectContent>
+                </Select>
+              </div>
             </div>
+
             <DialogFooter>
               <Button type="submit" disabled={isSubmitting}>
                 {isSubmitting ? "Agregando..." : "Agregar"}
@@ -574,6 +675,33 @@ export function InventoryView({ manualModalOpen, setManualModalOpen }: Inventory
           </form>
         </DialogContent>
       </Dialog>
+
+
+      <AlertDialog open={deleteInventoryModalOpen} onOpenChange={setDeleteInventoryModalOpen}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>¿Eliminar todo el inventario?</AlertDialogTitle>
+            <AlertDialogDescription>
+              Esta acción no se puede deshacer. Se eliminarán todos los productos y sus datos asociados del inventario.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancelar</AlertDialogCancel>
+            <AlertDialogAction
+              onClick={handleDeleteInventory}
+              className="bg-destructive hover:bg-destructive/90 text-destructive-foreground"
+              disabled={isDeleting}
+            >
+              {isDeleting ? "Eliminando..." : "Eliminar inventario"}
+            </AlertDialogAction>
+
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+
+
+
+
 
 
     </div>

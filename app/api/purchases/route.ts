@@ -38,7 +38,6 @@ function parseExcelDate(value: any): Date | string {
   const date = new Date(value);
   return isNaN(date.getTime()) ? value : new Date(Date.UTC(date.getFullYear(), date.getMonth(), date.getDate()));
 }
-
 // ---------------- POST ----------------
 export async function POST(request: Request) {
   try {
@@ -77,6 +76,7 @@ export async function POST(request: Request) {
     const branchesCol = db.collection("branches");
     const inventoryCol = db.collection("inventory"); // <-- nueva colección
 
+    // --- Normalizar nombres de columnas ---
     const normalizedData = jsonData.map((row) => {
       const normalizedRow: Record<string, any> = {};
       for (const key in row) {
@@ -85,6 +85,13 @@ export async function POST(request: Request) {
       return normalizedRow;
     });
 
+    // --- Obtener primera sucursal como predeterminada ---
+    const defaultBranchDoc = await branchesCol.findOne({});
+    const defaultBranch = defaultBranchDoc
+      ? { name: defaultBranchDoc.name, address: defaultBranchDoc.address }
+      : null;
+
+    // --- Agrupar compras por noPedido, noOrden y fecha ---
     const grouped: Record<string, any[]> = {};
     normalizedData.forEach((row) => {
       const key = `${row.noPedido}_${row.noOrden}_${row.fecha}`;
@@ -92,6 +99,7 @@ export async function POST(request: Request) {
       grouped[key].push(row);
     });
 
+    // --- Procesar cada grupo ---
     for (const groupKey in grouped) {
       const rows = grouped[groupKey];
       const firstRow = rows[0];
@@ -122,6 +130,7 @@ export async function POST(request: Request) {
       if (purchaseItems.length > 0) {
         await itemsCol.insertMany(purchaseItems);
 
+        // --- Actualizar inventario ---
         for (const [index, item] of purchaseItems.entries()) {
           const branchSearch = rows[index].sucursal?.toString().trim();
           let branch: { name: string; address: string } | null = null;
@@ -133,6 +142,9 @@ export async function POST(request: Request) {
             if (branchDoc)
               branch = { name: branchDoc.name, address: branchDoc.address };
           }
+
+          // Si no se encontró sucursal en Excel, usar la predeterminada
+          if (!branch) branch = defaultBranch;
 
           await inventoryCol.updateOne(
             { codigo: item.material, "branch.name": branch?.name ?? null },
@@ -159,8 +171,9 @@ export async function POST(request: Request) {
     console.error("❌ Error al procesar el archivo:", error);
     return NextResponse.json({ error: error.message }, { status: 500 });
   }
-  // ❌ quitamos el client.close() porque la conexión es persistente
+  // ❌ No cerramos client.close() porque la conexión es persistente
 }
+
 
 
 // ---------------- GET ----------------

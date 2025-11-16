@@ -3,11 +3,12 @@
 import { useState } from "react"
 import Link from "next/link"
 import { Button } from "@/components/ui/button"
-import { ArrowLeftRight, History, Plus } from "lucide-react"
+import { ArrowLeftRight, History, Plus, Trash } from "lucide-react"
 import { InventoryView } from "@/components/inventory/inventory-view"
 
 export default function InventoryPage() {
   const [manualModalOpen, setManualModalOpen] = useState(false)
+  const [deleteInventoryModalOpen, setDeleteInventoryModalOpen] = useState(false)
 
   return (
     <div className="flex min-h-screen flex-col">
@@ -46,6 +47,17 @@ export default function InventoryPage() {
                 <span className="sm:hidden">Trasladar</span>
               </Button>
             </Link>
+
+            <Button
+              variant="destructive"  // cambia el color a rojo
+              size="sm"
+              onClick={() => setDeleteInventoryModalOpen(true)}
+              className="gap-2"
+            >
+              <Trash className="h-4 w-4" />
+              <span className="hidden sm:inline">Eliminar Inventario</span>
+              <span className="sm:hidden">Eliminar</span>
+            </Button>
           </div>
         </div>
       </header>
@@ -55,6 +67,8 @@ export default function InventoryPage() {
         <InventoryView
           manualModalOpen={manualModalOpen}
           setManualModalOpen={setManualModalOpen}
+          deleteInventoryModalOpen={deleteInventoryModalOpen}
+          setDeleteInventoryModalOpen={setDeleteInventoryModalOpen}
         />
       </main>
     </div>

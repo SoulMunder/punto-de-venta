@@ -59,9 +59,20 @@ export async function GET(req: Request) {
 
     const filtro: Filter<Document> = {}
     if (decodedSearch) {
-      const safeRegex = new RegExp(decodedSearch.replace(/[.*+?^${}()|[\]\\]/g, "\\$&"), "i")
-      filtro.$or = [{ descripcion: { $regex: safeRegex } }]
+      const safeRegex = new RegExp(
+        decodedSearch.replace(/[.*+?^${}()|[\]\\]/g, "\\$&"),
+        "i"
+      )
+
+      filtro.$or = [
+        { descripcion: { $regex: safeRegex } },
+        { ean: { $regex: safeRegex } },
+        { codigo: { $eq: Number(decodedSearch) } },     // búsqueda exacta si es número
+        { codigo: { $regex: safeRegex.toString() } }    // fallback si fuera string
+      ]
+
     }
+
 
     const total = await db.collection("products").countDocuments(filtro)
     const products = await db

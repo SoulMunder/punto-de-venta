@@ -264,9 +264,9 @@ export function ProductCardList() {
                 </div>
 
                 <div className="flex gap-1.5 sm:gap-2 text-[9px] sm:text-[10px] text-muted-foreground">
-                  {product.clave && (
+                  {product.codigo && (
                     <p className="truncate flex-1">
-                      <span className="font-medium">Clave:</span> {product.clave}
+                      <span className="font-medium">Codigo:</span> {product.codigo}
                     </p>
                   )}
                   {product.ean && (

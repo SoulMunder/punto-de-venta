@@ -14,11 +14,11 @@ clientPromise = global._mongoClientPromise
 
 export async function POST(req: Request) {
   try {
-    const { codigo, cantidad } = await req.json()
+    const { codigo, cantidad, branch } = await req.json() // <-- recibimos branch
 
-    if (!codigo || !cantidad) {
+    if (!codigo || !cantidad || !branch) {
       return NextResponse.json(
-        { error: "Código y cantidad son obligatorios" },
+        { error: "Código, cantidad y sucursal son obligatorios" },
         { status: 400 }
       )
     }
@@ -42,17 +42,17 @@ export async function POST(req: Request) {
 
     // 🧮 Actualizar inventario existente o crear uno nuevo
     const result = await systemDB.collection("inventory").updateOne(
-      { codigo: Number(codigo), branch: null }, // Puedes filtrar también por sucursal si lo necesitas
+      { codigo: Number(codigo), branch }, // <-- filtro incluye branch
       {
-        $inc: { cantidad: Number(cantidad) }, // suma cantidad
+        $inc: { cantidad: Number(cantidad) },
         $set: { updatedAt: new Date() },
         $setOnInsert: {
           _id: new ObjectId(),
           createdAt: new Date(),
-          branch: null,
+          branch, // <-- guardamos la sucursal
         },
       },
-      { upsert: true } // crea si no existe
+      { upsert: true }
     )
 
     return NextResponse.json({
@@ -69,10 +69,4 @@ export async function POST(req: Request) {
       { status: 500 }
     )
   }
-}
-
-// 👇 Declarar variable global (necesario para evitar múltiples conexiones en dev)
-declare global {
-  // eslint-disable-next-line no-var
-  var _mongoClientPromise: Promise<MongoClient> | undefined
 }
