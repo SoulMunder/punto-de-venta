@@ -16,6 +16,7 @@ export async function processProductsSale(sale: NewSale): Promise<{ data: SaleRe
     const salesCollection = mainDb.collection("sales");
     const saleItemsCollection = mainDb.collection("sale_items");
     const inventoryCollection = mainDb.collection("inventory");
+    const inventoryLogsCollection = mainDb.collection("inventory_logs"); // <-- nueva colección
 
     const newSaleDoc = {
       branch_id: new ObjectId(sale.branch_id),
@@ -32,7 +33,6 @@ export async function processProductsSale(sale: NewSale): Promise<{ data: SaleRe
 
     // PASO 1: Insertar Venta
     const saleResult = await salesCollection.insertOne(newSaleDoc);
-
     if (!saleResult.acknowledged) {
       return { data: null, error: "No se pudo insertar la venta en la base de datos." }
     }
@@ -56,7 +56,7 @@ export async function processProductsSale(sale: NewSale): Promise<{ data: SaleRe
       saleItemsInserted = true;
     }
 
-    // PASO 3: Actualizar Inventario
+    // PASO 3: Actualizar Inventario y crear logs
     if (sale.sale_type !== "cotizacion" && sale.cart) {
       for (const item of sale.cart) {
         const itemObjectId = new ObjectId(item.product._id)
@@ -66,16 +66,24 @@ export async function processProductsSale(sale: NewSale): Promise<{ data: SaleRe
           { returnDocument: 'after' }
         );
 
-        console.log("---Update Result---:", updateResult);
-
         if (!updateResult) {
           throw new Error(`Inventario no encontrado o no actualizado para el producto ${item.product.codigo}`);
         }
+
+        // --- Insertar log de inventario ---
+        await inventoryLogsCollection.insertOne({
+          codigo: Number(item.product.codigo),
+          cantidad: item.quantity,
+          tipo: "Salida", // porque es una venta
+          motivo: "Venta de productos",
+          createdAt: new Date(),
+          createdBy: sale.created_by_user,
+        });
       }
       inventoryUpdated = true;
     }
 
-    //PASO 4: Si es credito e hizo un pago, insertar pago
+    // PASO 4: Si es credito e hizo un pago, insertar pago
     if(sale.sale_type === "credito" && sale.payment_received > 0 ){
       const payment = {
         sale_id: saleId.toString(),
@@ -118,7 +126,6 @@ export async function processProductsSale(sale: NewSale): Promise<{ data: SaleRe
           as: "sale_items",
         },
       },
-      // Hacer unwind para poder hacer lookup de productos individualmente
       { $unwind: { path: "$sale_items", preserveNullAndEmptyArrays: true } },
       {
         $lookup: {
@@ -129,7 +136,6 @@ export async function processProductsSale(sale: NewSale): Promise<{ data: SaleRe
         },
       },
       { $unwind: { path: "$product_info", preserveNullAndEmptyArrays: true } },
-      // Reagrupar todo
       {
         $group: {
           _id: "$_id",
@@ -182,33 +188,25 @@ export async function processProductsSale(sale: NewSale): Promise<{ data: SaleRe
 
     const finalSaleData = aggregatedSales[0] as SaleReceipt | null || null;
 
-    console.log("---DATA---:", finalSaleData);
-
     return { data: finalSaleData, error: null };
 
   } catch (error) {
     console.error("Error al procesar la venta en servidor:", error);
     
-    // ========== ROLLBACK MANUAL ========== Si hay algun error, restaura los registros
+    // ========== ROLLBACK MANUAL ==========
     try {
       const mainDb = await connectToMainDatabase();
       
       if (saleId) {
-        console.log("Iniciando rollback...");
-
-        // 0. Eliminar pago si se creó
+        // Eliminar pagos
         if (paymentCreated) {
           const paymentsCollection = mainDb.collection("payments");
           await paymentsCollection.deleteMany({ sale_id: saleId });
-          console.log("Pago eliminado");
         }
         
-        // 1. Restaurar inventario (solo si no es cotización)
+        // Restaurar inventario
         if (sale.sale_type !== "cotizacion" && sale.cart && inventoryUpdated ) {
           const inventoryCollection = mainDb.collection("inventory");
-
-          
-          
           for (const item of sale.cart) {
             const itemObjectId = new ObjectId(item.product._id)
             await inventoryCollection.updateOne(
@@ -216,22 +214,27 @@ export async function processProductsSale(sale: NewSale): Promise<{ data: SaleRe
               { $inc: { cantidad: item.quantity } }
             );
           }
-          console.log("Inventario restaurado");
+
+          // --- Eliminar logs de inventario ---
+          const inventoryLogsCollection = mainDb.collection("inventory_logs");
+          for (const item of sale.cart) {
+            await inventoryLogsCollection.deleteMany({
+              codigo: Number(item.product.codigo),
+              tipo: "Salida",
+              createdBy: sale.created_by.toString()
+            });
+          }
         }
         
-        // 2. Eliminar sale_items si se insertaron
+        // Eliminar sale_items
         if (saleItemsInserted) {
           const saleItemsCollection = mainDb.collection("sale_items");
           await saleItemsCollection.deleteMany({ sale_id: saleId });
-          console.log("Items de venta eliminados");
         }
         
-        // 3. Eliminar la venta
+        // Eliminar la venta
         const salesCollection = mainDb.collection("sales");
         await salesCollection.deleteOne({ _id: saleId });
-        console.log("Venta eliminada");
-        
-        console.log("Rollback completado exitosamente");
       }
     } catch (rollbackError) {
       console.error("Error durante el rollback:", rollbackError);

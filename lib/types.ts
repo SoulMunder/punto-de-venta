@@ -161,6 +161,7 @@ export interface SaleWithRelations extends Sale {
 
 export interface NewSale extends Omit<Sale, 'id' | 'sale_date' | 'created_at'> {
   cart: CartItem[]
+  created_by_user?: string; // <-- agregar esto
 }
 
 export interface CartItem {
@@ -227,6 +228,16 @@ export interface Profile {
   branch_id: string | null
   created_at: string
   updated_at: string
+}
+
+export interface InventoryLog {
+  _id: string
+  codigo: number
+  cantidad: number
+  tipo: "Entrada" | "Salida"
+  motivo: string
+  createdAt: string
+  createdBy: string
 }
 
 export interface ProfileWithBranches extends Profile {

@@ -3,7 +3,7 @@
 import { useState } from "react"
 import Link from "next/link"
 import { Button } from "@/components/ui/button"
-import { ArrowLeftRight, History, Plus, Trash } from "lucide-react"
+import { ArrowLeftRight, History, Plus, Repeat, Trash } from "lucide-react"
 import { InventoryView } from "@/components/inventory/inventory-view"
 
 export default function InventoryPage() {
@@ -30,14 +30,24 @@ export default function InventoryPage() {
               <span className="sm:hidden">Manual</span>
             </Button>
 
-            {/* 🟡 Botón Historial */}
-            <Link href="/admin/inventory/movements">
+            {/* 🔵 Botón: Entradas y Salidas */}
+            <Link href="/admin/inventory-logs">
               <Button variant="outline" size="sm" className="gap-2 bg-transparent">
                 <History className="h-4 w-4" />
-                <span className="hidden sm:inline">Historial de Movimientos</span>
-                <span className="sm:hidden">Historial</span>
+                <span className="hidden sm:inline">Entradas / Salidas</span>
+                <span className="sm:hidden">Movimientos</span>
               </Button>
             </Link>
+
+            {/* 🟣 Botón: Traslados entre Sucursales */}
+            <Link href="/admin/inventory/movements">
+              <Button variant="outline" size="sm" className="gap-2 bg-transparent">
+                <Repeat className="h-4 w-4" />
+                <span className="hidden sm:inline">Traslados</span>
+                <span className="sm:hidden">Traspasos</span>
+              </Button>
+            </Link>
+
 
             {/* 🟠 Botón Trasladar */}
             <Link href="/admin/inventory/transfer">

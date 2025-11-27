@@ -1,5 +1,4 @@
 import { NextResponse } from "next/server";
-import { MongoClient, ObjectId } from "mongodb";
 import * as XLSX from "xlsx";
 import { clientPromise, dbName } from "@/lib/mongo";
 
@@ -46,15 +45,9 @@ export async function POST(request: Request) {
     const userName = formData.get("name") as string;
 
     if (!file)
-      return NextResponse.json(
-        { error: "No se recibió ningún archivo." },
-        { status: 400 }
-      );
+      return NextResponse.json({ error: "No se recibió ningún archivo." }, { status: 400 });
     if (!userName)
-      return NextResponse.json(
-        { error: "Nombre de usuario no proporcionado." },
-        { status: 400 }
-      );
+      return NextResponse.json({ error: "Nombre de usuario no proporcionado." }, { status: 400 });
 
     const arrayBuffer = await file.arrayBuffer();
     const workbook = XLSX.read(arrayBuffer, { type: "array" });
@@ -63,18 +56,15 @@ export async function POST(request: Request) {
     const jsonData: any[] = XLSX.utils.sheet_to_json(sheet, { defval: "" });
 
     if (jsonData.length === 0)
-      return NextResponse.json(
-        { error: "El archivo está vacío o no tiene datos válidos." },
-        { status: 400 }
-      );
+      return NextResponse.json({ error: "El archivo está vacío o no tiene datos válidos." }, { status: 400 });
 
-    // --- Conexión persistente ---
     const client = await clientPromise;
     const db = client.db(dbName);
     const purchasesCol = db.collection("purchases");
     const itemsCol = db.collection("purchaseItems");
     const branchesCol = db.collection("branches");
-    const inventoryCol = db.collection("inventory"); // <-- nueva colección
+    const inventoryCol = db.collection("inventory");
+    const inventoryLogsCol = db.collection("inventory_logs"); // <-- NUEVO
 
     // --- Normalizar nombres de columnas ---
     const normalizedData = jsonData.map((row) => {
@@ -85,13 +75,11 @@ export async function POST(request: Request) {
       return normalizedRow;
     });
 
-    // --- Obtener primera sucursal como predeterminada ---
     const defaultBranchDoc = await branchesCol.findOne({});
     const defaultBranch = defaultBranchDoc
       ? { name: defaultBranchDoc.name, address: defaultBranchDoc.address }
       : null;
 
-    // --- Agrupar compras por noPedido, noOrden y fecha ---
     const grouped: Record<string, any[]> = {};
     normalizedData.forEach((row) => {
       const key = `${row.noPedido}_${row.noOrden}_${row.fecha}`;
@@ -99,7 +87,6 @@ export async function POST(request: Request) {
       grouped[key].push(row);
     });
 
-    // --- Procesar cada grupo ---
     for (const groupKey in grouped) {
       const rows = grouped[groupKey];
       const firstRow = rows[0];
@@ -130,36 +117,37 @@ export async function POST(request: Request) {
       if (purchaseItems.length > 0) {
         await itemsCol.insertMany(purchaseItems);
 
-        // --- Actualizar inventario ---
+        // --- Actualizar inventario y agregar logs ---
         for (const [index, item] of purchaseItems.entries()) {
           const branchSearch = rows[index].sucursal?.toString().trim();
           let branch: { name: string; address: string } | null = null;
 
           if (branchSearch) {
-            const branchDoc = await branchesCol.findOne({
-              nombre: { $regex: `^${branchSearch}$`, $options: "i" },
-            });
-            if (branchDoc)
-              branch = { name: branchDoc.name, address: branchDoc.address };
+            const branchDoc = await branchesCol.findOne({ nombre: { $regex: `^${branchSearch}$`, $options: "i" } });
+            if (branchDoc) branch = { name: branchDoc.name, address: branchDoc.address };
           }
 
-          // Si no se encontró sucursal en Excel, usar la predeterminada
           if (!branch) branch = defaultBranch;
 
-          await inventoryCol.updateOne(
+          const updateResult = await inventoryCol.updateOne(
             { codigo: item.material, "branch.name": branch?.name ?? null },
             {
               $inc: { cantidad: item.cantidad },
-              $set: {
-                updatedAt: new Date(),
-                branch: branch ?? null,
-              },
-              $setOnInsert: {
-                createdAt: new Date(),
-              },
+              $set: { updatedAt: new Date(), branch: branch ?? null },
+              $setOnInsert: { createdAt: new Date() },
             },
             { upsert: true }
           );
+
+          // --- Crear log en inventoryLogs ---
+          await inventoryLogsCol.insertOne({
+            codigo: item.material,
+            cantidad: item.cantidad,
+            tipo: "Entrada", // Asumimos que siempre es entrada al procesar compras
+            motivo: `Compra trupper`,
+            createdAt: new Date(),
+            createdBy: userName,
+          });
         }
       }
     }
@@ -171,7 +159,6 @@ export async function POST(request: Request) {
     console.error("❌ Error al procesar el archivo:", error);
     return NextResponse.json({ error: error.message }, { status: 500 });
   }
-  // ❌ No cerramos client.close() porque la conexión es persistente
 }
 
 

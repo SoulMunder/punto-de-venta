@@ -14,7 +14,7 @@ clientPromise = global._mongoClientPromise
 
 export async function POST(req: Request) {
   try {
-    const { codigo, cantidad, branch } = await req.json() // <-- recibimos branch
+    const { codigo, cantidad, branch, createdBy } = await req.json()
 
     if (!codigo || !cantidad || !branch) {
       return NextResponse.json(
@@ -23,12 +23,11 @@ export async function POST(req: Request) {
       )
     }
 
-    // ✅ Usa conexión persistente
     const mongoClient = await clientPromise
     const trupperDB = mongoClient.db(process.env.TRUPPER_DB_NAME)
     const systemDB = mongoClient.db(process.env.SYSTEM_COLLECTION_NAME)
 
-    // 🔍 Buscar producto por código
+    // 🔍 Buscar producto
     const producto = await trupperDB
       .collection("products")
       .findOne({ codigo: Number(codigo) })
@@ -40,20 +39,31 @@ export async function POST(req: Request) {
       )
     }
 
-    // 🧮 Actualizar inventario existente o crear uno nuevo
+    // 🔄 Actualizar o crear inventario
     const result = await systemDB.collection("inventory").updateOne(
-      { codigo: Number(codigo), branch }, // <-- filtro incluye branch
+      { codigo: Number(codigo), branch },
       {
         $inc: { cantidad: Number(cantidad) },
         $set: { updatedAt: new Date() },
         $setOnInsert: {
           _id: new ObjectId(),
           createdAt: new Date(),
-          branch, // <-- guardamos la sucursal
+          branch,
         },
       },
       { upsert: true }
     )
+
+    // 📌 Registrar movimiento en la colección logs
+    await systemDB.collection("inventory_logs").insertOne({
+      _id: new ObjectId(),
+      codigo: Number(codigo),
+      cantidad: Number(cantidad),
+      tipo: "Entrada",                 // entrada al inventario
+      motivo: "Compra de carga manual",    // motivo predefinido
+      createdAt: new Date(),
+      createdBy: createdBy,   // 👈 AQUI guardas al usuario real
+    })
 
     return NextResponse.json({
       message: result.upsertedCount
@@ -62,6 +72,7 @@ export async function POST(req: Request) {
       modifiedCount: result.modifiedCount,
       upsertedId: result.upsertedId,
     })
+
   } catch (error) {
     console.error("❌ Error al agregar al inventario:", error)
     return NextResponse.json(

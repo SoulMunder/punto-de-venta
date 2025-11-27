@@ -61,7 +61,7 @@ function FileUploader() {
 
     const formData = new FormData()
     formData.append("archivo", file)
-    formData.append("name", user.name) // 🔹 Solo enviamos el ID del usuario
+    formData.append("name", user.username) // 🔹 Solo enviamos el ID del usuario
 
     const response = await fetch("/api/purchases", { method: "POST", body: formData })
     if (!response.ok) {

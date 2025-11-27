@@ -19,6 +19,8 @@ import { getInventoryProducts } from "@/app/actions/inventoryProducts/get-invent
 import { getCustomers } from "@/app/actions/customers/get-customers"
 import { processProductsSale } from "@/app/actions/sales/process-products-sale"
 import { getQuoteSales } from "@/app/actions/sales/get-quote-sales"
+import { useSession } from "next-auth/react"
+
 
 interface POSInterfaceProps {
   branches: Branch[]
@@ -28,7 +30,7 @@ interface POSInterfaceProps {
 }
 
 export function POSInterface({ branches, userId, userBranchId, allowBranchChange = false }: POSInterfaceProps) {
-  const initialBranch = userBranchId ?  userBranchId : branches[0].id || ""
+  const initialBranch = userBranchId ? userBranchId : branches[0].id || ""
   const [branchId, setBranchId] = useState(initialBranch)
   const [products, setProducts] = useState<InventoryProduct[]>([])
   const [customers, setCustomers] = useState<Customer[]>([])
@@ -50,8 +52,11 @@ export function POSInterface({ branches, userId, userBranchId, allowBranchChange
   const [saleType, setSaleType] = useState<"remision" | "credito" | "cotizacion">("remision")
   const initialLoadDone = useRef(false);  // Usamos useRef para mantener un estado mutable sin re-renderizar
 
+  const { data: session } = useSession()
+
+
   useEffect(() => {
-     if (!initialLoadDone.current) {
+    if (!initialLoadDone.current) {
       initialLoadDone.current = true;
       loadProducts();
       loadCustomers();
@@ -67,24 +72,24 @@ export function POSInterface({ branches, userId, userBranchId, allowBranchChange
     }
   }, [products]);
 
-   useEffect(() => {
+  useEffect(() => {
     if (!products.length) return; // espera a que ambos existan
     loadAllCustomPrices()
   }, [products]);
 
   const loadProducts = async () => {
     try {
-      const branchesNames= branches.map((branch)=>branch.name)
+      const branchesNames = branches.map((branch) => branch.name)
       const { data, error } = await getInventoryProducts(branchesNames)
-        if (error || !data) {
-          console.error("Error al cargar usuarios:", error)
-          return
-        }
-        setProducts(data)
-        console.log(data)
+      if (error || !data) {
+        console.error("Error al cargar usuarios:", error)
+        return
+      }
+      setProducts(data)
+      console.log(data)
     } catch (error) {
       console.error(error)
-    }   
+    }
   }
 
   const loadCustomers = async () => {
@@ -100,22 +105,22 @@ export function POSInterface({ branches, userId, userBranchId, allowBranchChange
     }
   }
 
-const loadAllCustomPrices = async () => {
+  const loadAllCustomPrices = async () => {
     const pricesMap: Record<string, Record<string, number>> = {};
-    
+
     products.forEach((product: any) => {
-        // Verifica que customPrices exista y sea un array
-        if (product.customPrices && product.customPrices.length > 0) {
-            // Inicializa el objeto para este producto
-            pricesMap[product._id] = {};
-            
-            // Itera sobre los precios personalizados
-            product.customPrices.forEach((customPrice: any) => {
-                pricesMap[product._id][customPrice.price_name] = customPrice.price_value;
-            });
-        }
+      // Verifica que customPrices exista y sea un array
+      if (product.customPrices && product.customPrices.length > 0) {
+        // Inicializa el objeto para este producto
+        pricesMap[product._id] = {};
+
+        // Itera sobre los precios personalizados
+        product.customPrices.forEach((customPrice: any) => {
+          pricesMap[product._id][customPrice.price_name] = customPrice.price_value;
+        });
+      }
     });
-    
+
     setProductCustomPrices(pricesMap);
   };
 
@@ -124,17 +129,17 @@ const loadAllCustomPrices = async () => {
   }, [saleType])
 
   const onSaleTypeChange = () => {
-      const cartToCheck = [...cart]
-      const checkedCart = cartToCheck.map((item)=>{
-        let quantity = item.quantity
-        if (item.quantity > item.product.cantidad) quantity = item.product.cantidad
-        return ({
-          ...item,
-          quantity
-        })
+    const cartToCheck = [...cart]
+    const checkedCart = cartToCheck.map((item) => {
+      let quantity = item.quantity
+      if (item.quantity > item.product.cantidad) quantity = item.product.cantidad
+      return ({
+        ...item,
+        quantity
       })
-      setCart(checkedCart)
-    }
+    })
+    setCart(checkedCart)
+  }
 
   const addToCart = (product: InventoryProduct, priceType: "retail" | "wholesale" | "custom", customPrice?: number) => {
     const existingItem = cart.find((item) => item.product.codigo === product.codigo && item.price_type === priceType)
@@ -148,7 +153,7 @@ const loadAllCustomPrices = async () => {
       setCart(
         cart.map((item) =>
           item.product.codigo === product.codigo && item.price_type === priceType
-            ? { ...item, quantity: item.quantity >= quantity? item.quantity : item.quantity + 1 }
+            ? { ...item, quantity: item.quantity >= quantity ? item.quantity : item.quantity + 1 }
             : item,
         ),
       )
@@ -161,7 +166,7 @@ const loadAllCustomPrices = async () => {
     setCart(cart.filter((_, i) => i !== index))
   }
 
-  const updateQuantity = (index: number, quantity: number, saleType:string) => {
+  const updateQuantity = (index: number, quantity: number, saleType: string) => {
     if (quantity < 1) return
     const updated = [...cart]
     const updatedItem = updated[index]
@@ -169,7 +174,7 @@ const loadAllCustomPrices = async () => {
       updated[index].quantity = updatedItem.product.cantidad
       return
     }
-    
+
     updated[index].quantity = quantity
     setCart(updated)
   }
@@ -210,15 +215,15 @@ const loadAllCustomPrices = async () => {
       }
     }
 
-    if(saleType !== "cotizacion"){
+    if (saleType !== "cotizacion") {
       let hasGreaterQuantity = false
-      for(const item of cart){
+      for (const item of cart) {
         if (item.quantity > item.product.cantidad) {
           alert(`La cantidad del producto ${item.product.descripcion} excede la cantidad en existencia que es: ${item.product.cantidad}`)
           hasGreaterQuantity = true
         }
       }
-      if(hasGreaterQuantity) return
+      if (hasGreaterQuantity) return
     }
 
     setIsProcessing(true)
@@ -232,19 +237,20 @@ const loadAllCustomPrices = async () => {
       const parentQuoteId = urlParams.get("convertQuote")
 
       const sale = {
-          branch_id: branchId,
-          customer_id: customerId,
-          total_amount: total,
-          payment_received: payment,
-          change_given: saleType === "cotizacion" ? 0 : Math.max(0, payment - total),
-          created_by: userId,
-          sale_type: saleType,
-          payment_status: saleType === "credito" ? "pending" : saleType === "cotizacion" ? "pending" : "paid" as  "pending" | "confirmed" | "paid", 
-          parent_sale_id: parentQuoteId || null,
-          cart,
+        branch_id: branchId,
+        customer_id: customerId,
+        total_amount: total,
+        payment_received: payment,
+        change_given: saleType === "cotizacion" ? 0 : Math.max(0, payment - total),
+        created_by: userId,
+        sale_type: saleType,
+        payment_status: saleType === "credito" ? "pending" : saleType === "cotizacion" ? "pending" : "paid" as "pending" | "confirmed" | "paid",
+        parent_sale_id: parentQuoteId || null,
+        cart,
+        created_by_user: session?.user?.username 
         }
 
-      const {data:saleData, error: saleError} = await processProductsSale(sale)
+      const { data: saleData, error: saleError } = await processProductsSale(sale)
 
       if (saleError) throw saleError
 
@@ -309,8 +315,8 @@ const loadAllCustomPrices = async () => {
   }
 
   const loadQuoteForConversion = async (quoteId: string) => {
-    try{
-      const {data, error} = await getQuoteSales(quoteId)
+    try {
+      const { data, error } = await getQuoteSales(quoteId)
       if (error || !data) {
         console.error("Error al cargar cotización:", error)
         return
@@ -345,12 +351,12 @@ const loadAllCustomPrices = async () => {
         setBranchId(data.branch_id)
       }
 
-      if (skippedProducts !== ""){
+      if (skippedProducts !== "") {
         alert(`Cotización cargada sin los siguientes productos${skippedProducts}. Selecciona el tipo de venta y completa la transacción.`)
       } else {
         alert("Cotización completamente cargada. Selecciona el tipo de venta y completa la transacción.")
       }
-      
+
 
     } catch (error) {
       console.error("Error loading quote:", error)
@@ -358,18 +364,18 @@ const loadAllCustomPrices = async () => {
     }
   }
 
-  
+
 
   const filteredProducts = products.filter((product) => {
     const matchesSearch =
       product.descripcion?.toLowerCase().includes(searchTerm.toLowerCase()) ||
       product.codigo?.toLowerCase().includes(searchTerm.toLowerCase()) ||
       product.barcode?.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      product.clave?.toLowerCase().includes(searchTerm.toLowerCase()) 
+      product.clave?.toLowerCase().includes(searchTerm.toLowerCase())
 
     const matchesBrand = brandFilter === "all" || product.marca === brandFilter
     const matchesLine = familyDescriptionFilter === "all" || product.descripcionFamilia === familyDescriptionFilter
-    const selectedBranch  = branches.find((branch)=>(branch.id === branchId))
+    const selectedBranch = branches.find((branch) => (branch.id === branchId))
     const matchesBranch = product.branch === selectedBranch?.name
     return matchesSearch && matchesBrand && matchesLine && matchesBranch
   })
@@ -591,7 +597,7 @@ const loadAllCustomPrices = async () => {
                               type="number"
                               min="1"
                               value={item.quantity}
-                              onChange={(e) => updateQuantity(index, Number.parseInt(e.target.value),saleType || 1)}
+                              onChange={(e) => updateQuantity(index, Number.parseInt(e.target.value), saleType || 1)}
                               className="w-12 sm:w-14 h-7 sm:h-8 text-xs"
                             />
                             <span className="text-xs whitespace-nowrap">× ${item.unit_price.toFixed(2)}</span>

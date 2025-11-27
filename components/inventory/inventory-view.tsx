@@ -10,10 +10,7 @@ import { Button } from "@/components/ui/button"
 import { ProductDetailsModal } from "@/components/products/product-details-modal"
 import { Card, CardContent, CardFooter, CardHeader } from "@/components/ui/card"
 import { Label } from "@/components/ui/label"
-
-
-
-
+import { useSession } from "next-auth/react"
 import { useRouter } from "next/navigation"
 import { Plus, Book } from "lucide-react"
 import {
@@ -37,8 +34,11 @@ import {
   DialogFooter,
   DialogHeader,
   DialogTitle,
+  DialogClose
 } from "@/components/ui/dialog"
 import { toast } from "sonner"
+
+
 
 interface ProductWithInventory extends Product {
   cantidad: number
@@ -63,6 +63,8 @@ export function InventoryView({
   deleteInventoryModalOpen,
   setDeleteInventoryModalOpen,
 }: InventoryViewProps) {
+  const { data: session } = useSession()
+
 
   const router = useRouter()
 
@@ -90,6 +92,9 @@ export function InventoryView({
   const [loadingBranches, setLoadingBranches] = useState(true)
   // Estado para indicar si se está eliminando
   const [isDeleting, setIsDeleting] = useState(false);
+
+  const [deleteQuantity, setDeleteQuantity] = useState<number | null>(null);
+  const [deleteReason, setDeleteReason] = useState("");
 
 
 
@@ -129,21 +134,24 @@ export function InventoryView({
     try {
       setIsSubmitting(true)
 
-      // 📨 Enviar datos al endpoint
+      const payload = {
+        codigo: productCode,
+        cantidad: quantity,
+        branch: {
+          name: selectedBranchManual?.name,
+          address: selectedBranchManual?.address,
+        },
+        createdBy: session?.user?.username
+      }
+
+      console.log("📦 Payload que se enviará al endpoint:", payload)
+
       const res = await fetch("/api/inventory/carga-manual", {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
         },
-        // body que envías desde el frontend
-        body: JSON.stringify({
-          codigo: productCode,
-          cantidad: quantity,
-          branch: {
-            name: selectedBranchManual?.name,
-            address: selectedBranchManual?.address,
-          }
-        })
+        body: JSON.stringify(payload)
       })
 
       const data = await res.json()
@@ -152,20 +160,15 @@ export function InventoryView({
         throw new Error(data.error || "Error al agregar el producto")
       }
 
-      // ✅ Éxito
       toast.success("Producto agregado exitosamente.", {
         description: `Código: ${productCode} | Cantidad: ${quantity} | Sucursal: ${selectedBranchManual?.name}`,
       })
 
-      // 🧹 Limpieza sin cerrar modal
       setProductCode("")
       setQuantity("")
-
-      // 🔄 Forzar recarga del inventario
       setShouldReload(true)
-
-      // 🔁 Enfocar input principal
       setTimeout(() => productCodeRef.current?.focus(), 50)
+
     } catch (error: any) {
       toast.error("Error al agregar el producto.", {
         description: error.message || "Por favor intenta nuevamente.",
@@ -174,6 +177,7 @@ export function InventoryView({
       setIsSubmitting(false)
     }
   }
+
 
 
   const cargarInventario = async (signal: AbortSignal) => {
@@ -270,50 +274,62 @@ export function InventoryView({
 
 
   const handleDelete = async () => {
-    if (!productToDelete) {
-      toast.error("No hay producto seleccionado");
-      return;
-    }
+  if (!productToDelete) {
+    toast.error("No hay producto seleccionado");
+    return;
+  }
 
+  if (!deleteQuantity || deleteQuantity < 1) {
+    toast.error("Ingresa una cantidad válida");
+    return;
+  }
+
+  try {
+    setIsDeleting(true);
+
+    // Crear objeto que enviarás
+    const payload = {
+      codigo: productToDelete.codigo,
+      branch: productToDelete.branch.name,
+      cantidad: deleteQuantity,
+      motivo: deleteReason || null,
+      createdBy: session?.user?.username,
+    };
+
+    // 🔹 Imprimir en consola lo que se enviará
+    console.log("Payload a enviar:", payload);
+    console.log("Payload JSON:", JSON.stringify(payload));
+
+    const res = await fetch("/api/inventory/delete-product", {
+      method: "DELETE",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(payload),
+    });
+
+    let data: any = {};
     try {
-      setIsDeleting(true); // opcional: mostrar spinner
+      data = await res.json();
+    } catch {}
 
-      const res = await fetch("/api/inventory/delete-product", {
-        method: "DELETE",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          codigo: productToDelete.codigo,
-          branch: productToDelete.branch.name,
-        }),
-      });
-
-      // Manejar JSON solo si existe
-      let data: any = {};
-      try {
-        data = await res.json();
-      } catch {
-        data = {};
-      }
-
-      if (!res.ok) {
-        throw new Error(data.error || "Error eliminando producto");
-      }
-
-      toast.success(data.message || "Producto eliminado correctamente");
-
-      // Limpiar estados
-      setDeleteDialogOpen(false);
-      setProductToDelete(null);
-      setShouldReload(true); // recargar inventario
-    } catch (error: any) {
-      console.error("Error eliminando producto:", error);
-      toast.error("Error eliminando producto", {
-        description: error.message,
-      });
-    } finally {
-      setIsDeleting(false);
+    if (!res.ok) {
+      throw new Error(data.error || "Error eliminando producto");
     }
-  };
+
+    toast.success(data.message || "Producto eliminado correctamente");
+
+    setDeleteDialogOpen(false);
+    setProductToDelete(null);
+    setDeleteQuantity(null); // si ahora lo manejas como number | null
+    setDeleteReason("");
+    setShouldReload(true);
+  } catch (error: any) {
+    console.error("Error eliminando producto:", error);
+    toast.error("Error eliminando producto", { description: error.message });
+  } finally {
+    setIsDeleting(false);
+  }
+};
+
 
 
   const handleDeleteInventory = async () => {
@@ -611,21 +627,94 @@ export function InventoryView({
 
       <ProductDetailsModal product={selectedProduct} open={detailsModalOpen} onOpenChange={setDetailsModalOpen} />
 
-      <AlertDialog open={deleteDialogOpen} onOpenChange={setDeleteDialogOpen}>
-        <AlertDialogContent>
-          <AlertDialogHeader>
-            <AlertDialogTitle>¿Eliminar producto?</AlertDialogTitle>
-            <AlertDialogDescription>
-              Esta acción no se puede deshacer. Se eliminará el producto{" "}
-              <span className="font-semibold">{productToDelete?.descripcion}</span> y todos sus datos asociados.
-            </AlertDialogDescription>
-          </AlertDialogHeader>
-          <AlertDialogFooter>
-            <AlertDialogCancel>Cancelar</AlertDialogCancel>
+      <Dialog
+        open={deleteDialogOpen}
+        onOpenChange={(open) => {
+          setDeleteDialogOpen(open);
+          if (!open) {
+            setDeleteQuantity(null); // vacío al abrir siguiente vez
+            setDeleteReason("");
+            setProductToDelete(null);
+          }
+        }}
+
+      >
+        <DialogContent
+          onOpenAutoFocus={(e) => {
+            e.preventDefault();
+            setTimeout(() => {
+              const input = document.querySelector('input[type="number"]') as HTMLInputElement;
+              if (input) {
+                input.focus();
+                input.blur();
+                input.focus();
+              }
+            }, 0);
+          }}
+        >
+          <DialogHeader>
+            <DialogTitle>¿Eliminar producto?</DialogTitle>
+            <DialogDescription>
+              Ingresa la <strong>cantidad</strong> a eliminar.
+              El motivo es opcional.
+            </DialogDescription>
+          </DialogHeader>
+
+          <div className="space-y-4 mt-4">
+            {/* Cantidad */}
+            <div className="flex flex-col gap-1">
+              <label className="text-sm font-medium">Cantidad a eliminar</label>
+              <input
+                type="number"
+                min={1}
+                max={productToDelete?.cantidad || undefined}
+                value={deleteQuantity ?? ""} // muestra vacío si es null
+                onChange={(e) => {
+                  const value = e.target.value;
+                  if (value === "") {
+                    setDeleteQuantity(null); // input vacío
+                    return;
+                  }
+                  const numberValue = Number(value);
+                  if (productToDelete && numberValue > productToDelete.cantidad) {
+                    toast.error(
+                      `No puedes eliminar más de lo que hay en stock (${productToDelete.cantidad})`
+                    );
+                    setDeleteQuantity(productToDelete.cantidad);
+                  } else {
+                    setDeleteQuantity(numberValue);
+                  }
+                }}
+                className="w-full rounded-md border px-3 py-2 text-sm"
+                placeholder="Ej. 5"
+              />
+
+            </div>
+
+            {/* Motivo opcional */}
+            <div className="flex flex-col gap-1">
+              <label className="text-sm font-medium">Motivo (opcional)</label>
+              <textarea
+                value={deleteReason}
+                onChange={(e) => setDeleteReason(e.target.value)}
+                className="w-full rounded-md border px-3 py-2 text-sm"
+                rows={3}
+                placeholder="Ej. Producto dañado, caducado, error de inventario..."
+              />
+            </div>
+          </div>
+
+          <DialogFooter className="mt-4">
+            <DialogClose asChild>
+              <Button variant="outline" disabled={isDeleting}>
+                Cancelar
+              </Button>
+            </DialogClose>
+
             <Button
               onClick={handleDelete}
+              disabled={isDeleting || !deleteQuantity || Number(deleteQuantity) < 1}
               className="bg-destructive hover:bg-destructive/90 text-destructive-foreground flex items-center justify-center gap-2"
-              disabled={isDeleting} // Deshabilitar mientras se elimina
             >
               {isDeleting ? (
                 <>
@@ -636,10 +725,9 @@ export function InventoryView({
                 "Eliminar"
               )}
             </Button>
-          </AlertDialogFooter>
-
-        </AlertDialogContent>
-      </AlertDialog>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
 
 
       <Dialog open={manualModalOpen} onOpenChange={setManualModalOpen}>
