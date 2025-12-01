@@ -1,9 +1,11 @@
 "use client"
 
+import type React from "react"
+
 import { useState, useEffect, useRef } from "react"
-import type { Branch, Product, Inventory } from "@/lib/types"
+import type { Branch, Product } from "@/lib/types"
 import { Input } from "@/components/ui/input"
-import { Search, Eye, Package, Pencil, Trash2 } from "lucide-react"
+import { Search, Eye, Package, Pencil, Trash2, Plus, X, Upload } from "lucide-react"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
@@ -12,7 +14,15 @@ import { Card, CardContent, CardFooter, CardHeader } from "@/components/ui/card"
 import { Label } from "@/components/ui/label"
 import { useSession } from "next-auth/react"
 import { useRouter } from "next/navigation"
-import { Plus, Book } from "lucide-react"
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+  DialogClose,
+} from "@/components/ui/dialog"
 import {
   AlertDialog,
   AlertDialogAction,
@@ -23,22 +33,9 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog"
-import Link from "next/link"
 import { DataTablePagination } from "./data-table-pagination"
 import { Skeleton } from "@/components/ui/skeleton"
-
-import {
-  Dialog,
-  DialogContent,
-  DialogDescription,
-  DialogFooter,
-  DialogHeader,
-  DialogTitle,
-  DialogClose
-} from "@/components/ui/dialog"
 import { toast } from "sonner"
-
-
 
 interface ProductWithInventory extends Product {
   cantidad: number
@@ -46,16 +43,15 @@ interface ProductWithInventory extends Product {
     name: string
     address: string
   }
+  lowStockThreshold: number
 }
 
-// 🟢 Recibe el estado del modal desde el padre
 interface InventoryViewProps {
   manualModalOpen: boolean
   setManualModalOpen: React.Dispatch<React.SetStateAction<boolean>>
   deleteInventoryModalOpen: boolean
   setDeleteInventoryModalOpen: React.Dispatch<React.SetStateAction<boolean>>
 }
-
 
 export function InventoryView({
   manualModalOpen,
@@ -65,7 +61,6 @@ export function InventoryView({
 }: InventoryViewProps) {
   const { data: session } = useSession()
 
-
   const router = useRouter()
 
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false)
@@ -74,48 +69,42 @@ export function InventoryView({
   const [selectedProduct, setSelectedProduct] = useState<Product | null>(null)
   const [selectedBranch, setSelectedBranch] = useState("all")
 
-
-  // --- 📦 Estados del modal manual ---
   const [productCode, setProductCode] = useState("")
   const [quantity, setQuantity] = useState("")
   const [selectedBranchManual, setSelectedBranchManual] = useState<Branch | null>(null)
 
   const [isSubmitting, setIsSubmitting] = useState(false)
 
-
-  // --- 📦 Estados del inventario ---
   const [shouldReload, setShouldReload] = useState(false)
   const [products, setProducts] = useState<ProductWithInventory[]>([])
   const [totalProducts, setTotalProducts] = useState(0)
   const [branches, setBranches] = useState<Branch[]>([])
   const [loading, setLoading] = useState(true)
   const [loadingBranches, setLoadingBranches] = useState(true)
-  // Estado para indicar si se está eliminando
-  const [isDeleting, setIsDeleting] = useState(false);
 
-  const [deleteQuantity, setDeleteQuantity] = useState<number | null>(null);
-  const [deleteReason, setDeleteReason] = useState("");
+  const [isDeleting, setIsDeleting] = useState(false)
+  const [deleteQuantity, setDeleteQuantity] = useState<number | null>(null)
+  const [deleteReason, setDeleteReason] = useState("")
 
+  const [editModalOpen, setEditModalOpen] = useState(false)
+  const [productToEdit, setProductToEdit] = useState<ProductWithInventory | null>(null)
+  const [editQuantity, setEditQuantity] = useState("")
+  const [editLowStockThreshold, setEditLowStockThreshold] = useState("10")
+  const [customPrices, setCustomPrices] = useState<Array<{ price_name: string; price_value: string }>>([])
+  const [editImageUrl, setEditImageUrl] = useState("")
+  const [imagePreview, setImagePreview] = useState("")
+  const fileInputRef = useRef<HTMLInputElement>(null)
+  const [isUpdating, setIsUpdating] = useState(false)
 
-
-  // --- 🔍 Filtros y paginación ---
   const [searchTerm, setSearchTerm] = useState("")
   const [entriesPerPage, setEntriesPerPage] = useState(10)
   const [currentPage, setCurrentPage] = useState(1)
   const offset = (currentPage - 1) * entriesPerPage
 
-  // --- 🔢 Rangos de paginación ---
   const start = totalProducts === 0 ? 0 : offset + 1
   const end = Math.min(currentPage * entriesPerPage, totalProducts)
 
-  // --- 📍 Referencias ---
   const productCodeRef = useRef<HTMLInputElement | null>(null)
-
-
-  // =====================================================
-  // 🧩 HANDLERS
-  // =====================================================
-
 
   const handleManualSubmit = (e: React.FormEvent) => {
     e.preventDefault()
@@ -125,10 +114,6 @@ export function InventoryView({
     }
     setIsSubmitting(true)
   }
-
-  // =====================================================
-  // 🚀 FUNCIONES ASÍNCRONAS
-  // =====================================================
 
   const agregarProductoManual = async () => {
     try {
@@ -141,7 +126,7 @@ export function InventoryView({
           name: selectedBranchManual?.name,
           address: selectedBranchManual?.address,
         },
-        createdBy: session?.user?.username
+        createdBy: session?.user?.username,
       }
 
       console.log("📦 Payload que se enviará al endpoint:", payload)
@@ -151,7 +136,7 @@ export function InventoryView({
         headers: {
           "Content-Type": "application/json",
         },
-        body: JSON.stringify(payload)
+        body: JSON.stringify(payload),
       })
 
       const data = await res.json()
@@ -168,7 +153,6 @@ export function InventoryView({
       setQuantity("")
       setShouldReload(true)
       setTimeout(() => productCodeRef.current?.focus(), 50)
-
     } catch (error: any) {
       toast.error("Error al agregar el producto.", {
         description: error.message || "Por favor intenta nuevamente.",
@@ -178,14 +162,12 @@ export function InventoryView({
     }
   }
 
-
-
   const cargarInventario = async (signal: AbortSignal) => {
     setLoading(true)
     try {
       const res = await fetch(
         `/api/inventory?searchTerm=${encodeURIComponent(searchTerm)}&limit=${entriesPerPage}&offset=${offset}`,
-        { signal }
+        { signal },
       )
       if (!res.ok) throw new Error("Error cargando inventario")
 
@@ -195,9 +177,14 @@ export function InventoryView({
         .filter((item: any) => item.product)
         .map((item: any) => ({
           ...item.product!,
+          _id: item._id, // ID del documento de inventario
           cantidad: item.cantidad,
           branch: item.branch || { name: "", address: "" },
+          // 👇 Agregar campos adicionales del documento de inventario
+          lowStockThreshold: item.lowStockThreshold,
+          customPrices: item.customPrices || [],
         }))
+      console.log(mapped)
 
       setProducts(mapped)
       setTotalProducts(total)
@@ -212,36 +199,25 @@ export function InventoryView({
     }
   }
 
-  // 2. Modificar la función cargarSucursales
   const cargarSucursales = async () => {
-    setLoadingBranches(true) // 🔄 Iniciar carga
+    setLoadingBranches(true)
     try {
       const res = await fetch("/api/branches")
       if (!res.ok) throw new Error("Error cargando sucursales")
       const data: Branch[] = await res.json()
       setBranches(data)
-
-
     } catch (err) {
       console.error("❌ Error cargando sucursales:", err)
       setBranches([])
     } finally {
-      setLoadingBranches(false) // ✅ Finalizar carga
+      setLoadingBranches(false)
     }
   }
 
-
-
-  // =====================================================
-  // 🧠 EFECTOS
-  // =====================================================
-
-  // 1️⃣ Efecto: manejar envío manual
   useEffect(() => {
     if (isSubmitting) agregarProductoManual()
   }, [isSubmitting])
 
-  // 2️⃣ Efecto: cargar inventario
   useEffect(() => {
     const controller = new AbortController()
     cargarInventario(controller.signal)
@@ -249,14 +225,12 @@ export function InventoryView({
     return () => controller.abort()
   }, [searchTerm, entriesPerPage, offset, shouldReload])
 
-  // 3️⃣ Efecto: cargar sucursales una vez
   useEffect(() => {
     cargarSucursales()
   }, [])
 
   useEffect(() => {
     if (manualModalOpen) {
-      // 🟢 Si las sucursales ya están cargadas y no hay una seleccionada, seleccionar la primera
       if (!loadingBranches && branches.length > 0 && !selectedBranchManual) {
         setSelectedBranchManual(branches[0])
       }
@@ -272,155 +246,265 @@ export function InventoryView({
     }
   }, [manualModalOpen, loadingBranches, branches, selectedBranchManual])
 
-
   const handleDelete = async () => {
-  if (!productToDelete) {
-    toast.error("No hay producto seleccionado");
-    return;
-  }
-
-  if (!deleteQuantity || deleteQuantity < 1) {
-    toast.error("Ingresa una cantidad válida");
-    return;
-  }
-
-  try {
-    setIsDeleting(true);
-
-    // Crear objeto que enviarás
-    const payload = {
-      codigo: productToDelete.codigo,
-      branch: productToDelete.branch.name,
-      cantidad: deleteQuantity,
-      motivo: deleteReason || null,
-      createdBy: session?.user?.username,
-    };
-
-    // 🔹 Imprimir en consola lo que se enviará
-    console.log("Payload a enviar:", payload);
-    console.log("Payload JSON:", JSON.stringify(payload));
-
-    const res = await fetch("/api/inventory/delete-product", {
-      method: "DELETE",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify(payload),
-    });
-
-    let data: any = {};
-    try {
-      data = await res.json();
-    } catch {}
-
-    if (!res.ok) {
-      throw new Error(data.error || "Error eliminando producto");
+    if (!productToDelete) {
+      toast.error("No hay producto seleccionado")
+      return
     }
 
-    toast.success(data.message || "Producto eliminado correctamente");
+    if (!deleteQuantity || deleteQuantity < 1) {
+      toast.error("Ingresa una cantidad válida")
+      return
+    }
 
-    setDeleteDialogOpen(false);
-    setProductToDelete(null);
-    setDeleteQuantity(null); // si ahora lo manejas como number | null
-    setDeleteReason("");
-    setShouldReload(true);
-  } catch (error: any) {
-    console.error("Error eliminando producto:", error);
-    toast.error("Error eliminando producto", { description: error.message });
-  } finally {
-    setIsDeleting(false);
+    try {
+      setIsDeleting(true)
+
+      const payload = {
+        codigo: productToDelete.codigo,
+        branch: productToDelete.branch.name,
+        cantidad: deleteQuantity,
+        motivo: deleteReason || null,
+        createdBy: session?.user?.username,
+      }
+
+      console.log("Payload a enviar:", payload)
+      console.log("Payload JSON:", JSON.stringify(payload))
+
+      const res = await fetch("/api/inventory/delete-product", {
+        method: "DELETE",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(payload),
+      })
+
+      let data: any = {}
+      try {
+        data = await res.json()
+      } catch { }
+
+      if (!res.ok) {
+        throw new Error(data.error || "Error eliminando producto")
+      }
+
+      toast.success(data.message || "Producto eliminado correctamente")
+
+      setDeleteDialogOpen(false)
+      setProductToDelete(null)
+      setDeleteQuantity(null)
+      setDeleteReason("")
+      setShouldReload(true)
+    } catch (error: any) {
+      console.error("Error eliminando producto:", error)
+      toast.error("Error eliminando producto", { description: error.message })
+    } finally {
+      setIsDeleting(false)
+    }
   }
-};
-
-
 
   const handleDeleteInventory = async () => {
     try {
-      setIsDeleting(true); // inicia cargando
+      setIsDeleting(true)
 
-      // Llamada al endpoint DELETE
       const res = await fetch("/api/inventory", {
         method: "DELETE",
-      });
+      })
 
       if (!res.ok) {
-        const data = await res.json();
-        throw new Error(data.error || "Error al eliminar inventario");
+        const data = await res.json()
+        throw new Error(data.error || "Error al eliminar inventario")
       }
 
-      const data = await res.json();
-      toast.success(data.message || "Inventario eliminado correctamente");
+      const data = await res.json()
+      toast.success(data.message || "Inventario eliminado correctamente")
 
-      // Cerrar modal
-      setDeleteInventoryModalOpen(false);
-
-      // Recargar la lista de inventario
-      setShouldReload(true);
+      setDeleteInventoryModalOpen(false)
+      setShouldReload(true)
     } catch (error: any) {
       toast.error("Error eliminando inventario", {
         description: error.message,
-      });
+      })
     } finally {
-      setIsDeleting(false); // termina cargando
+      setIsDeleting(false)
     }
-  };
-
+  }
 
   const handleViewDetails = (product: Product) => {
     setSelectedProduct(product)
     setDetailsModalOpen(true)
   }
 
-  const getStockStatus = (quantity: number) => {
+  const handleOpenEditModal = (product: ProductWithInventory) => {
+    console.log(product)
+    setProductToEdit(product)
+
+    setEditQuantity(product.cantidad.toString())
+
+    // Usar lowStockThreshold del producto o 10 por defecto
+    setEditLowStockThreshold(
+      "lowStockThreshold" in product && product.lowStockThreshold
+        ? product.lowStockThreshold.toString()
+        : "10"
+    )
+
+    setCustomPrices(
+      product.customPrices?.map(p => ({
+        price_name: p.price_name,
+        price_value: String(p.price_value)  // convertimos a string para el input
+      })) || []
+    );
+
+
+
+
+    // Usar image_url del inventario o del producto
+    const currentImage = "image_url" in product ? (product.image_url as string) || "" : ""
+    setEditImageUrl(currentImage)
+    setImagePreview(currentImage)
+
+    setEditModalOpen(true)
+  }
+
+  const handleImageFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0]
+    if (file) {
+      if (file.size > 5 * 1024 * 1024) {
+        toast.error("La imagen no debe superar los 5MB")
+        return
+      }
+
+      const reader = new FileReader()
+      reader.onloadend = () => {
+        const base64 = reader.result as string
+        setImagePreview(base64)
+        setEditImageUrl(base64)
+      }
+      reader.readAsDataURL(file)
+    }
+  }
+
+  const handleImageUrlChange = (url: string) => {
+    setEditImageUrl(url)
+    setImagePreview(url)
+  }
+
+  const handleSaveEdit = async () => {
+    if (!productToEdit) return
+
+    if (!editQuantity || Number(editQuantity) < 0) {
+      toast.error("Ingresa una cantidad válida")
+      return
+    }
+
+    try {
+      setIsUpdating(true)
+
+      const validCustomPrices = customPrices.filter((price) => price.price_name.trim() !== "" && price.price_value.trim() !== "")
+
+      const payload = {
+        id: productToEdit._id, // 👈 Enviar el _id
+        cantidad: Number(editQuantity),
+        lowStockThreshold: editLowStockThreshold ? Number(editLowStockThreshold) : 10,
+        customPrices: validCustomPrices.map((price) => ({
+          price_name: price.price_name,
+          price_value: Number(price.price_value),
+        })),
+        imageUrl: editImageUrl || null,
+        updatedBy: session?.user?.username,
+      }
+
+      console.log("📝 Payload de edición:", payload)
+
+      const res = await fetch("/api/inventory/update-product", {
+        method: "PUT",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify(payload),
+      })
+
+      const data = await res.json()
+
+      if (!res.ok) {
+        throw new Error(data.error || "Error al actualizar el producto")
+      }
+
+      toast.success("Producto actualizado exitosamente")
+
+      setEditModalOpen(false)
+      setProductToEdit(null)
+      setEditQuantity("")
+      setEditLowStockThreshold("10")
+      setCustomPrices([])
+      setEditImageUrl("")
+      setImagePreview("")
+      setShouldReload(true)
+    } catch (error: any) {
+      toast.error("Error al actualizar el producto", {
+        description: error.message || "Por favor intenta nuevamente.",
+      })
+    } finally {
+      setIsUpdating(false)
+    }
+  }
+
+  const addCustomPrice = () => {
+    setCustomPrices([...customPrices, { price_name: "", price_value: "" }])
+  }
+
+  const removeCustomPrice = (index: number) => {
+    setCustomPrices(customPrices.filter((_, i) => i !== index))
+  }
+
+  const updateCustomPrice = (index: number, field: "price_name" | "price_value", value: string) => {
+    const updated = [...customPrices]
+    updated[index][field] = value
+    setCustomPrices(updated)
+  }
+
+  const getStockStatus = (quantity: number, lowStockThreshold: number = 10) => {
     if (quantity === 0) return { label: "Sin stock", variant: "destructive" as const }
-    if (quantity < 10) return { label: "Stock bajo", variant: "secondary" as const }
+    if (quantity < lowStockThreshold) return { label: "Stock bajo", variant: "secondary" as const }
     return { label: "En stock", variant: "default" as const }
   }
 
-  // 🔵 Filtrar productos por sucursal seleccionada
   const filteredProducts =
-    selectedBranch === "all"
-      ? products
-      : products.filter((p) => p.branch?.name === selectedBranch)
-
-
+    selectedBranch === "all" ? products : products.filter((p) => p.branch?.name === selectedBranch)
 
   return (
     <div className="space-y-4 sm:space-y-6 p-2 sm:p-4">
-      {/* Buscador y botón nuevo */}
       <div className="flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-3 sm:gap-4">
         <div className="flex items-center gap-2 max-w-full sm:max-w-md">
-          {/* Input de búsqueda */}
-          <div className="relative flex-1 flex gap-2">
-            <div className="relative flex-1">
-              <Search className="absolute left-3 top-1/2 h-3.5 w-3.5 sm:h-4 sm:w-4 -translate-y-1/2 text-muted-foreground" />
-              <Input
-                placeholder="Buscar productos..."
-                value={searchTerm}
-                onChange={(e) => setSearchTerm(e.target.value)}
-                className="pl-8 sm:pl-9 h-9 sm:h-10 text-xs sm:text-sm w-[25vw]"
-              />
+          <div className="flex items-center gap-2 max-w-full sm:max-w-md">
+            <div className="relative flex-1 flex gap-2">
+              <div className="relative flex-1">
+                <Search className="absolute left-3 top-1/2 h-3.5 w-3.5 sm:h-4 sm:w-4 -translate-y-1/2 text-muted-foreground" />
+                <Input
+                  placeholder="Buscar productos..."
+                  value={searchTerm}
+                  onChange={(e) => setSearchTerm(e.target.value)}
+                  className="pl-8 sm:pl-9 h-9 sm:h-10 text-xs sm:text-sm w-[25vw]"
+                />
+              </div>
+              <Select value={selectedBranch} onValueChange={setSelectedBranch}>
+                <SelectTrigger className="w-full sm:w-[200px]">
+                  <SelectValue placeholder="Todas las sucursales" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="all">Todas las sucursales</SelectItem>
+                  {branches.map((branch) => (
+                    <SelectItem key={branch.name} value={branch.name}>
+                      {branch.name}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
             </div>
-            <Select value={selectedBranch} onValueChange={setSelectedBranch}>
-              <SelectTrigger className="w-full sm:w-[200px]">
-                <SelectValue placeholder="Todas las sucursales" />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="all">Todas las sucursales</SelectItem>
-                {branches.map((branch) => (
-                  <SelectItem key={branch.name} value={branch.name}>
-                    {branch.name}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
           </div>
         </div>
-
-
       </div>
 
-      {/* Contenido */}
       {loading ? (
-        <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 gap-2 sm:gap-3">
+        <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-5 gap-2 sm:gap-3">
           {Array.from({ length: entriesPerPage }).map((_, index) => (
             <Card key={index} className="overflow-hidden">
               <CardHeader className="p-0">
@@ -474,14 +558,11 @@ export function InventoryView({
           </p>
         </div>
       ) : (
-        <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 gap-2 sm:gap-3">
-
+        <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-5 gap-2 sm:gap-3">
           {filteredProducts.map((product) => {
-            const status = getStockStatus(product.cantidad);
-
-            // Generar key única combinando _id + branch + codigo
-            const branchName = product.branch?.name ?? "SinSucursal";
-            const uniqueKey = `${product._id}_${branchName}_${product.codigo}`;
+            const status = getStockStatus(product.cantidad, product.lowStockThreshold ?? 10)
+            const branchName = product.branch?.name ?? "SinSucursal"
+            const uniqueKey = `${product._id}_${branchName}_${product.codigo}`
 
             return (
               <Card key={uniqueKey} className="overflow-hidden hover:shadow-lg transition-shadow">
@@ -489,7 +570,7 @@ export function InventoryView({
                   <div className="aspect-[4/3] relative bg-muted flex items-center justify-center overflow-hidden rounded-md">
                     {"image_url" in product && product.image_url ? (
                       <img
-                        src={product.image_url}
+                        src={product.image_url || "/placeholder.svg"}
                         alt={product.descripcion}
                         className="w-full h-full object-cover"
                       />
@@ -534,7 +615,6 @@ export function InventoryView({
                             ? `$${Number(product.precioDistribuidorConIVA).toFixed(2)}`
                             : ""}
                         </p>
-
                       </div>
                       <div className="px-1.5 sm:px-2">
                         <p className="text-[8px] sm:text-[9px] text-muted-foreground mb-0.5">Publico</p>
@@ -544,7 +624,6 @@ export function InventoryView({
                             ? Number(product.precioPublicoConIVA).toFixed(2)
                             : product.precioPublicoConIVA}
                         </p>
-
                       </div>
                       <div className="pl-1.5 sm:pl-2">
                         <p className="text-[8px] sm:text-[9px] text-muted-foreground mb-0.5">Mayoreo</p>
@@ -554,17 +633,13 @@ export function InventoryView({
                             ? Number(product.precioMayoreoConIVA).toFixed(2)
                             : product.precioMayoreoConIVA}
                         </p>
-
                       </div>
                     </div>
                   </div>
 
-
                   <div className="flex justify-between items-center pt-2 border-t">
                     <span className="text-muted-foreground">Sucursal:</span>
-                    <span className="text-muted-foreground">
-                      {product.branch?.name || "Sin definir"}
-                    </span>
+                    <span className="text-muted-foreground">{product.branch?.name || "Sin definir"}</span>
                   </div>
 
                   <div className="flex justify-between items-center mt-1">
@@ -576,8 +651,6 @@ export function InventoryView({
                     <span className="text-muted-foreground">Cantidad:</span>
                     <span className="text-xl font-bold">{product.cantidad}</span>
                   </div>
-
-
                 </CardContent>
 
                 <CardFooter className="p-1.5 sm:p-2 pt-0 flex gap-0.5 sm:gap-1">
@@ -594,7 +667,7 @@ export function InventoryView({
                     variant="outline"
                     size="sm"
                     className="h-6 w-6 sm:h-7 sm:w-7 p-0 bg-transparent"
-                    onClick={() => router.push(`/admin/products/${product._id.toString()}/edit`)}
+                    onClick={() => handleOpenEditModal(product)}
                   >
                     <Pencil className="h-2.5 w-2.5 sm:h-3 sm:w-3" />
                   </Button>
@@ -613,10 +686,9 @@ export function InventoryView({
               </Card>
             )
           })}
-
-
         </div>
       )}
+
       <DataTablePagination
         currentPage={currentPage}
         entriesPerPage={entriesPerPage}
@@ -630,68 +702,61 @@ export function InventoryView({
       <Dialog
         open={deleteDialogOpen}
         onOpenChange={(open) => {
-          setDeleteDialogOpen(open);
+          setDeleteDialogOpen(open)
           if (!open) {
-            setDeleteQuantity(null); // vacío al abrir siguiente vez
-            setDeleteReason("");
-            setProductToDelete(null);
+            setDeleteQuantity(null)
+            setDeleteReason("")
+            setProductToDelete(null)
           }
         }}
-
       >
         <DialogContent
           onOpenAutoFocus={(e) => {
-            e.preventDefault();
+            e.preventDefault()
             setTimeout(() => {
-              const input = document.querySelector('input[type="number"]') as HTMLInputElement;
+              const input = document.querySelector('input[type="number"]') as HTMLInputElement
               if (input) {
-                input.focus();
-                input.blur();
-                input.focus();
+                input.focus()
+                input.blur()
+                input.focus()
               }
-            }, 0);
+            }, 0)
           }}
         >
           <DialogHeader>
             <DialogTitle>¿Eliminar producto?</DialogTitle>
             <DialogDescription>
-              Ingresa la <strong>cantidad</strong> a eliminar.
-              El motivo es opcional.
+              Ingresa la <strong>cantidad</strong> a eliminar. El motivo es opcional.
             </DialogDescription>
           </DialogHeader>
 
           <div className="space-y-4 mt-4">
-            {/* Cantidad */}
             <div className="flex flex-col gap-1">
               <label className="text-sm font-medium">Cantidad a eliminar</label>
               <input
                 type="number"
                 min={1}
                 max={productToDelete?.cantidad || undefined}
-                value={deleteQuantity ?? ""} // muestra vacío si es null
+                value={deleteQuantity ?? ""}
                 onChange={(e) => {
-                  const value = e.target.value;
+                  const value = e.target.value
                   if (value === "") {
-                    setDeleteQuantity(null); // input vacío
-                    return;
+                    setDeleteQuantity(null)
+                    return
                   }
-                  const numberValue = Number(value);
+                  const numberValue = Number(value)
                   if (productToDelete && numberValue > productToDelete.cantidad) {
-                    toast.error(
-                      `No puedes eliminar más de lo que hay en stock (${productToDelete.cantidad})`
-                    );
-                    setDeleteQuantity(productToDelete.cantidad);
+                    toast.error(`No puedes eliminar más de lo que hay en stock (${productToDelete.cantidad})`)
+                    setDeleteQuantity(productToDelete.cantidad)
                   } else {
-                    setDeleteQuantity(numberValue);
+                    setDeleteQuantity(numberValue)
                   }
                 }}
                 className="w-full rounded-md border px-3 py-2 text-sm"
                 placeholder="Ej. 5"
               />
-
             </div>
 
-            {/* Motivo opcional */}
             <div className="flex flex-col gap-1">
               <label className="text-sm font-medium">Motivo (opcional)</label>
               <textarea
@@ -729,20 +794,17 @@ export function InventoryView({
         </DialogContent>
       </Dialog>
 
-
       <Dialog open={manualModalOpen} onOpenChange={setManualModalOpen}>
         <DialogContent className="sm:max-w-[425px]">
           <DialogHeader>
             <DialogTitle>Gestión Manual</DialogTitle>
-
           </DialogHeader>
           <form onSubmit={handleManualSubmit}>
             <div className="grid gap-4 py-4">
-              {/* Código del producto */}
               <div className="grid gap-2">
                 <Label htmlFor="productCode">Código del producto</Label>
                 <Input
-                  ref={productCodeRef} // 🟢 referencia
+                  ref={productCodeRef}
                   id="productCode"
                   value={productCode}
                   onChange={(e) => setProductCode(e.target.value)}
@@ -751,7 +813,6 @@ export function InventoryView({
                 />
               </div>
 
-              {/* Cantidad */}
               <div className="grid gap-2">
                 <Label htmlFor="quantity">Cantidad</Label>
                 <Input
@@ -765,7 +826,6 @@ export function InventoryView({
                 />
               </div>
 
-              {/* Sucursal */}
               <div className="grid gap-2">
                 <Label htmlFor="branch">Sucursal</Label>
                 <Select
@@ -774,16 +834,10 @@ export function InventoryView({
                     const branch = branches.find((b) => b.name === name) || null
                     setSelectedBranchManual(branch)
                   }}
-                  disabled={isSubmitting || loadingBranches} // 🔄 Deshabilitar mientras carga
+                  disabled={isSubmitting || loadingBranches}
                 >
                   <SelectTrigger id="branch" className="w-full">
-                    <SelectValue
-                      placeholder={
-                        loadingBranches
-                          ? "Cargando sucursales..."
-                          : "Selecciona una sucursal"
-                      }
-                    />
+                    <SelectValue placeholder={loadingBranches ? "Cargando sucursales..." : "Selecciona una sucursal"} />
                   </SelectTrigger>
                   <SelectContent>
                     {loadingBranches ? (
@@ -818,11 +872,9 @@ export function InventoryView({
                 )}
               </Button>
             </DialogFooter>
-
           </form>
         </DialogContent>
       </Dialog>
-
 
       <AlertDialog open={deleteInventoryModalOpen} onOpenChange={setDeleteInventoryModalOpen}>
         <AlertDialogContent>
@@ -841,16 +893,203 @@ export function InventoryView({
             >
               {isDeleting ? "Eliminando..." : "Eliminar inventario"}
             </AlertDialogAction>
-
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
 
+      <Dialog
+        open={editModalOpen}
+        onOpenChange={(open) => {
+          setEditModalOpen(open)
+          if (!open) {
+            setProductToEdit(null)
+            setEditQuantity("")
+            setEditLowStockThreshold("10")
+            setCustomPrices([])
+            setEditImageUrl("")
+            setImagePreview("")
+          }
+        }}
+      >
+        <DialogContent className="sm:max-w-[550px] max-h-[90vh] overflow-y-auto">
+          <DialogHeader>
+            <DialogTitle>Editar Producto</DialogTitle>
+            <DialogDescription>
+              {productToEdit?.descripcion} - {productToEdit?.codigo}
+            </DialogDescription>
+          </DialogHeader>
 
+          <div className="space-y-4 py-4">
+            <div className="space-y-2">
+              <Label>Imagen del Producto</Label>
+              <div className="flex flex-col gap-3">
+                <div className="relative w-full aspect-video bg-muted rounded-md overflow-hidden flex items-center justify-center">
+                  {imagePreview ? (
+                    <img
+                      src={imagePreview}
+                      alt="Preview"
+                      className="max-w-full max-h-full object-contain"
+                    />
+                  ) : (
+                    <Package className="h-12 w-12 text-muted-foreground" />
+                  )}
+                </div>
 
+                <div className="grid gap-2">
+                  <Input
+                    placeholder="URL de la imagen"
+                    value={editImageUrl}
+                    onChange={(e) => handleImageUrlChange(e.target.value)}
+                    disabled={isUpdating}
+                    className="text-sm"
+                  />
 
+                  <div className="flex gap-2">
+                    <input
+                      ref={fileInputRef}
+                      type="file"
+                      accept="image/*"
+                      onChange={handleImageFileChange}
+                      className="hidden"
+                      disabled={isUpdating}
+                    />
+                    <Button
+                      type="button"
+                      variant="outline"
+                      onClick={() => fileInputRef.current?.click()}
+                      disabled={isUpdating}
+                      className="flex-1"
+                    >
+                      <Upload className="h-4 w-4 mr-2" />
+                      Subir Imagen
+                    </Button>
 
+                    {imagePreview && (
+                      <Button
+                        type="button"
+                        variant="outline"
+                        onClick={() => {
+                          setEditImageUrl("")
+                          setImagePreview("")
+                        }}
+                        disabled={isUpdating}
+                      >
+                        <X className="h-4 w-4" />
+                      </Button>
+                    )}
+                  </div>
+                </div>
 
+                <p className="text-xs text-muted-foreground">
+                  Puedes ingresar una URL o subir una imagen desde tu dispositivo (máx. 5MB)
+                </p>
+              </div>
+            </div>
+
+            <div className="grid gap-2">
+              <Label htmlFor="editQuantity">Cantidad</Label>
+              <Input
+                id="editQuantity"
+                type="number"
+                value={editQuantity}
+                onChange={(e) => setEditQuantity(e.target.value)}
+                placeholder="Ingresa la cantidad"
+                min="0"
+                disabled={isUpdating}
+              />
+            </div>
+
+            <div className="grid gap-2">
+              <Label htmlFor="lowStockThreshold">Stock bajo (umbral)</Label>
+              <Input
+                id="lowStockThreshold"
+                type="number"
+                value={editLowStockThreshold}
+                onChange={(e) => setEditLowStockThreshold(e.target.value)}
+                placeholder="Ej. 10"
+                min="0"
+                disabled={isUpdating}
+              />
+              <p className="text-xs text-muted-foreground">Cantidad mínima antes de considerar el stock como bajo</p>
+            </div>
+
+            <div className="space-y-3">
+              <div className="flex items-center justify-between">
+                <Label>Precios Personalizados</Label>
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="sm"
+                  onClick={addCustomPrice}
+                  disabled={isUpdating}
+                  className="h-8 bg-transparent"
+                >
+                  <Plus className="h-4 w-4 mr-1" />
+                  Agregar Precio
+                </Button>
+              </div>
+
+              {customPrices.length === 0 ? (
+                <p className="text-xs text-muted-foreground italic">
+                  No hay precios personalizados. Haz clic en "Agregar Precio" para añadir uno.
+                </p>
+              ) : (
+                <div className="space-y-2 max-h-[200px] overflow-y-auto pr-2">
+                  {customPrices.map((price, index) => (
+                    <div key={index} className="flex gap-2 items-start">
+                      <div className="flex-1 grid grid-cols-2 gap-2">
+                        <Input
+                          placeholder="Nombre del precio"
+                          value={price.price_name}
+                          onChange={(e) => updateCustomPrice(index, "price_name", e.target.value)}
+                          disabled={isUpdating}
+                          className="text-xs"
+                        />
+                        <Input
+                          type="number"
+                          placeholder="Valor"
+                          value={price.price_value}
+                          onChange={(e) => updateCustomPrice(index, "price_value", e.target.value)}
+                          disabled={isUpdating}
+                          step="0.01"
+                          min="0"
+                          className="text-xs"
+                        />
+                      </div>
+                      <Button
+                        type="button"
+                        variant="outline"
+                        size="icon"
+                        onClick={() => removeCustomPrice(index)}
+                        disabled={isUpdating}
+                        className="h-10 w-10 flex-shrink-0"
+                      >
+                        <X className="h-4 w-4 text-destructive" />
+                      </Button>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+          </div>
+
+          <DialogFooter className="flex gap-2">
+            <Button variant="outline" onClick={() => setEditModalOpen(false)} disabled={isUpdating}>
+              Cancelar
+            </Button>
+            <Button onClick={handleSaveEdit} disabled={isUpdating} className="flex items-center gap-2">
+              {isUpdating ? (
+                <>
+                  <span className="loader h-4 w-4 border-2 border-t-transparent border-white rounded-full animate-spin"></span>
+                  Guardando...
+                </>
+              ) : (
+                "Guardar Cambios"
+              )}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   )
 }

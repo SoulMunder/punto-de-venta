@@ -12,10 +12,15 @@ export default async function POSPage() {
   }
 
    const { data: branches, error } = await getBranches()
+   
 
   // If user has no assigned branches, fall back to their default branch
   const user = session.user
   let availableBranches = branches || []
+
+  console.log("Branches desde API:", branches)
+console.log("Usuario:", user)
+
 
   if (user.assignedBranches?.length === 0 && user.defaultBranch) {
     availableBranches = branches.filter(branch => branch.id === user.defaultBranch)

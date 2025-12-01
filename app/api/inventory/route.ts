@@ -4,7 +4,10 @@ import { clientPromise } from "@/lib/mongo" // <-- conexión persistente global
 export async function GET(request: Request) {
   try {
     const { searchParams } = new URL(request.url)
-    const limit = parseInt(searchParams.get("limit") || "10")
+    const limit = searchParams.has("limit")
+      ? parseInt(searchParams.get("limit")!)
+      : 0 // 0 significa “sin límite” para mongo
+
     const offset = parseInt(searchParams.get("offset") || "0")
     const rawSearch = searchParams.get("searchTerm") || ""
     const decodedSearch = decodeURIComponent(rawSearch).trim()
@@ -33,10 +36,10 @@ export async function GET(request: Request) {
     const filteredProductCodes =
       decodedSearch.length > 0
         ? (
-            await productsCollection
-              .find(filtro, { projection: { codigo: 1 } })
-              .toArray()
-          ).map((p) => p.codigo)
+          await productsCollection
+            .find(filtro, { projection: { codigo: 1 } })
+            .toArray()
+        ).map((p) => p.codigo)
         : []
 
     // 2️⃣ Filtro de inventario
@@ -47,11 +50,16 @@ export async function GET(request: Request) {
     const total = await inventoryCollection.countDocuments(inventoryFilter)
 
     // 4️⃣ Paginado
-    const inventoryDocs = await inventoryCollection
-      .find(inventoryFilter)
-      .skip(offset)
-      .limit(limit)
-      .toArray()
+    // 4️⃣ Paginado
+    const cursor = inventoryCollection.find(inventoryFilter)
+
+    // solo aplicar limit si el usuario lo envió explícitamente
+    if (limit > 0) cursor.limit(limit)
+
+    // aplicar offset solo si es mayor a 0
+    if (offset > 0) cursor.skip(offset)
+
+    const inventoryDocs = await cursor.toArray()
 
     // 5️⃣ Productos relacionados
     const inventoryCodes = inventoryDocs.map((doc) => doc.codigo).filter(Boolean)

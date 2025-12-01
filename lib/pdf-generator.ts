@@ -44,67 +44,154 @@ export async function downloadSaleReceiptPDF(receiptData: SaleReceiptData) {
 }
 
 async function createSaleReceiptPDF(receiptData: SaleReceiptData): Promise<jsPDF> {
+  // Reduced page height to half of letter size
+  const customHeight = 139.7 // Half of letter height (279.4mm / 2)
+  const letterWidth = 215.9 // Standard letter width
+  
   const doc = new jsPDF({
     orientation: "landscape",
     unit: "mm",
-    format: [215.9, 139.7],
+    format: [customHeight, letterWidth], // Letter width, half height
   })
 
   const pageWidth = doc.internal.pageSize.getWidth()
+  const pageHeight = doc.internal.pageSize.getHeight()
   const margin = 10
 
-  let yPosition = 15
+  // Prepare sale date
+  const saleDate = new Date(receiptData.sale_date).toLocaleDateString("es-MX", {
+    year: "numeric",
+    month: "long",
+    day: "numeric",
+    hour: "2-digit",
+    minute: "2-digit",
+  })
 
+  const saleTypeText =
+    receiptData.sale_type === "credito"
+      ? "VENTA A CRÉDITO"
+      : receiptData.sale_type === "cotizacion"
+        ? "COTIZACIÓN"
+        : "REMISIÓN"
+
+  // Load logo
+  let logoImg: HTMLImageElement | null = null
   try {
-    const logoImg = new Image()
+    logoImg = new Image()
     logoImg.src = "/images/masicsa-logo.png"
     await new Promise((resolve) => {
-      logoImg.onload = resolve
-      logoImg.onerror = resolve
+      logoImg!.onload = resolve
+      logoImg!.onerror = resolve
     })
-
-    if (logoImg.complete && logoImg.naturalHeight !== 0) {
-      const logoWidth = 25
-      const logoHeight = (logoImg.naturalHeight / logoImg.naturalWidth) * logoWidth
-      doc.addImage(logoImg, "PNG", margin, yPosition, logoWidth, logoHeight)
-
-      // Company name and sale type next to logo
-      const textStartX = margin + logoWidth + 5
-      doc.setFontSize(14)
-      doc.setFont("helvetica", "bold")
-      doc.text("MASICSA", textStartX, yPosition + 5)
-
-      const saleTypeText =
-        receiptData.sale_type === "credito"
-          ? "VENTA A CRÉDITO"
-          : receiptData.sale_type === "cotizacion"
-            ? "COTIZACIÓN"
-            : "REMISIÓN"
-
-      doc.setFontSize(11)
-      doc.text(saleTypeText, textStartX, yPosition + 12)
-
-      yPosition += Math.max(logoHeight, 15) + 8
+    if (!logoImg.complete || logoImg.naturalHeight === 0) {
+      logoImg = null
     }
   } catch (error) {
     console.error("[v0] Error loading logo:", error)
-    doc.setFontSize(16)
-    doc.setFont("helvetica", "bold")
-    doc.text("MASICSA", margin, yPosition)
-    yPosition += 8
-
-    const saleTypeText =
-      receiptData.sale_type === "credito"
-        ? "VENTA A CRÉDITO"
-        : receiptData.sale_type === "cotizacion"
-          ? "COTIZACIÓN"
-          : "REMISIÓN"
-
-    doc.setFontSize(12)
-    doc.text(saleTypeText, margin, yPosition)
-    yPosition += 8
+    logoImg = null
   }
 
+  // Header function - will be called for each page
+  const drawHeader = (data: any) => {
+    const currentPage = data.pageNumber
+    let yPos = 8
+
+    if (logoImg) {
+      // Logo on the left
+      const logoWidth = 25
+      const logoHeight = (logoImg.naturalHeight / logoImg.naturalWidth) * logoWidth
+      const logoY = yPos - 3
+      doc.addImage(logoImg, "PNG", margin, logoY, logoWidth, logoHeight)
+      
+      // Right column: Company name, sale type, then customer details
+      const rightColumnX = margin + logoWidth + 12
+      let rightY = yPos
+      
+      // Company name
+      doc.setFontSize(12)
+      doc.setFont("helvetica", "bold")
+      doc.text("MASICSA", rightColumnX, rightY)
+      rightY += 5
+
+      // Sale type
+      doc.setFontSize(9)
+      doc.setFont("helvetica", "bold")
+      doc.text(saleTypeText, rightColumnX, rightY)
+      rightY += 6
+
+      // Customer and sale details
+      doc.setFontSize(8)
+      doc.setFont("helvetica", "normal")
+      
+      doc.text(`Folio: ${receiptData.id.substring(0, 8).toUpperCase()}`, rightColumnX, rightY)
+      rightY += 4
+      doc.text(`Fecha: ${saleDate}`, rightColumnX, rightY)
+      rightY += 4
+      doc.text(`Sucursal: ${receiptData.branch.name}`, rightColumnX, rightY)
+      rightY += 4
+      doc.text(`Cliente: ${receiptData.customer?.name || "Cliente General"}`, rightColumnX, rightY)
+    } else {
+      // Fallback without logo
+      doc.setFontSize(12)
+      doc.setFont("helvetica", "bold")
+      doc.text("MASICSA", margin, yPos)
+      yPos += 5
+
+      doc.setFontSize(9)
+      doc.text(saleTypeText, margin, yPos)
+      yPos += 6
+
+      doc.setFontSize(8)
+      doc.setFont("helvetica", "normal")
+      doc.text(`Folio: ${receiptData.id.substring(0, 8).toUpperCase()}`, margin, yPos)
+      yPos += 4
+      doc.text(`Fecha: ${saleDate}`, margin, yPos)
+      yPos += 4
+      doc.text(`Sucursal: ${receiptData.branch.name}`, margin, yPos)
+      yPos += 4
+      doc.text(`Cliente: ${receiptData.customer?.name || "Cliente General"}`, margin, yPos)
+    }
+  }
+
+  // Footer function - will be called for each page
+  const drawFooter = (data: any) => {
+    const currentPage = data.pageNumber
+    const totalPages = (doc as any).internal.getNumberOfPages()
+    
+    // Only draw totals and thank you on the last page
+    if (currentPage === totalPages) {
+      let footerY = pageHeight - 30 // Moved up from -20 to -30
+
+      // Totals section
+      const totalsStartX = margin
+      const totalsWidth = 60
+      
+      doc.setFontSize(9)
+      doc.setFont("helvetica", "bold")
+      doc.text("Total:", totalsStartX, footerY)
+      doc.text(`$${receiptData.total_amount.toFixed(2)}`, totalsStartX + totalsWidth, footerY, { align: "right" })
+      footerY += 5
+
+      if (receiptData.sale_type !== "cotizacion") {
+        doc.setFont("helvetica", "normal")
+        doc.text("Pago recibido:", totalsStartX, footerY)
+        doc.text(`$${receiptData.payment_received.toFixed(2)}`, totalsStartX + totalsWidth, footerY, { align: "right" })
+        footerY += 5
+
+        doc.text("Cambio:", totalsStartX, footerY)
+        doc.text(`$${receiptData.change_given.toFixed(2)}`, totalsStartX + totalsWidth, footerY, { align: "right" })
+        footerY += 5
+      }
+
+      // Thank you message
+      footerY += 2
+      doc.setFontSize(7)
+      doc.setFont("helvetica", "italic")
+      doc.text("¡Gracias por su compra!", pageWidth / 2, footerY, { align: "center" })
+    }
+  }
+
+  // Prepare table data
   const tableData = receiptData.sale_items.map((item) => {
     const productName = item.product.name
     const brand = item.product.brand || ""
@@ -119,8 +206,9 @@ async function createSaleReceiptPDF(receiptData: SaleReceiptData): Promise<jsPDF
     ]
   })
 
+  // Generate table with header and footer on each page
   autoTable(doc, {
-    startY: yPosition,
+    startY: 38, // Start after header
     head: [["Producto", "Cant.", "Precio", "Subtotal"]],
     body: tableData,
     theme: "striped",
@@ -130,66 +218,22 @@ async function createSaleReceiptPDF(receiptData: SaleReceiptData): Promise<jsPDF
       fontStyle: "bold",
     },
     bodyStyles: {
-      fontSize: 8,
+      fontSize: 7,
     },
     columnStyles: {
-      0: { cellWidth: 120 },
+      0: { cellWidth: 110 },
       1: { cellWidth: 20, halign: "center" },
-      2: { cellWidth: 25, halign: "right" },
-      3: { cellWidth: 30, halign: "right" },
+      2: { cellWidth: 30, halign: "right" },
+      3: { cellWidth: 35, halign: "right" },
     },
-    margin: { left: margin, right: margin },
+    margin: { left: margin, right: margin, top: 38, bottom: 35 }, // Increased bottom margin from 25 to 35
+    didDrawPage: (data) => {
+      // Draw header on every page
+      drawHeader(data)
+      // Draw footer on every page
+      drawFooter(data)
+    },
   })
-
-  yPosition = (doc as any).lastAutoTable.finalY + 10
-
-  const leftColumnX = margin
-  const rightColumnX = pageWidth / 2 + 10
-  let leftY = yPosition
-  let rightY = yPosition
-
-  // Left column: Totals
-  doc.setFontSize(10)
-  doc.setFont("helvetica", "bold")
-  doc.text("Total:", leftColumnX, leftY)
-  doc.text(`$${receiptData.total_amount.toFixed(2)}`, leftColumnX + 40, leftY, { align: "right" })
-  leftY += 6
-
-  if (receiptData.sale_type !== "cotizacion") {
-    doc.setFont("helvetica", "normal")
-    doc.text("Pago recibido:", leftColumnX, leftY)
-    doc.text(`$${receiptData.payment_received.toFixed(2)}`, leftColumnX + 40, leftY, { align: "right" })
-    leftY += 6
-
-    doc.text("Cambio:", leftColumnX, leftY)
-    doc.text(`$${receiptData.change_given.toFixed(2)}`, leftColumnX + 40, leftY, { align: "right" })
-  }
-
-  // Right column: Customer data
-  doc.setFontSize(9)
-  doc.setFont("helvetica", "normal")
-
-  const saleDate = new Date(receiptData.sale_date).toLocaleDateString("es-MX", {
-    year: "numeric",
-    month: "long",
-    day: "numeric",
-    hour: "2-digit",
-    minute: "2-digit",
-  })
-
-  doc.text(`Fecha: ${saleDate}`, rightColumnX, rightY)
-  rightY += 5
-  doc.text(`Sucursal: ${receiptData.branch.name}`, rightColumnX, rightY)
-  rightY += 5
-  doc.text(`Cliente: ${receiptData.customer?.name || "Cliente General"}`, rightColumnX, rightY)
-  rightY += 5
-  doc.text(`Folio: ${receiptData.id.substring(0, 8).toUpperCase()}`, rightColumnX, rightY)
-
-  // Footer message
-  const finalY = Math.max(leftY, rightY) + 10
-  doc.setFontSize(8)
-  doc.setFont("helvetica", "italic")
-  doc.text("¡Gracias por su compra!", pageWidth / 2, finalY, { align: "center" })
 
   return doc
 }

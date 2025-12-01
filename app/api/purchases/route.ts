@@ -17,26 +17,123 @@ function toCamelCaseNoAccents(str: string) {
     .replace(/^./, c => c.toLowerCase());
 }
 
+// Función corregida para parsear fechas de Excel
 function parseExcelDate(value: any): Date | string {
+  console.log('🔍 parseExcelDate recibió:', { value, type: typeof value, isDate: value instanceof Date });
+  
   if (!value) return value;
 
+  // Si ya es un objeto Date
+  if (value instanceof Date) {
+    return new Date(Date.UTC(
+      value.getUTCFullYear(), 
+      value.getUTCMonth(), 
+      value.getUTCDate(),
+      0, 0, 0, 0  // Asegurar medianoche exacta
+    ));
+  }
+
+  // Si es un número (serial date de Excel)
+  if (typeof value === "number") {
+    // Redondeamos para ignorar la parte de hora/minuto/segundo
+    const daysPart = Math.round(value); // Cambiado a Math.round en lugar de Math.floor
+    
+    // Epoch de Excel: 1899-12-30 (día 0 en Excel)
+    const excelEpoch = new Date(Date.UTC(1899, 11, 30));
+    const msPerDay = 24 * 60 * 60 * 1000;
+    const resultDate = new Date(excelEpoch.getTime() + daysPart * msPerDay);
+    
+    console.log('📊 Excel serial:', { 
+      original: value, 
+      daysPart,
+      result: resultDate.toISOString(),
+      year: resultDate.getUTCFullYear(),
+      month: resultDate.getUTCMonth() + 1,
+      day: resultDate.getUTCDate()
+    });
+    
+    return new Date(Date.UTC(
+      resultDate.getUTCFullYear(),
+      resultDate.getUTCMonth(),
+      resultDate.getUTCDate(),
+      0, 0, 0, 0
+    ));
+  }
+
+  // Si es string
   if (typeof value === "string") {
+    const trimmed = value.trim();
+    
     const months: Record<string, number> = {
-      jan: 0, feb: 1, mar: 2, apr: 3, may: 4, jun: 5,
-      jul: 6, aug: 7, sep: 8, oct: 9, nov: 10, dec: 11
+      jan: 0, ene: 0, 
+      feb: 1,
+      mar: 2,
+      apr: 3, abr: 3,
+      may: 4,
+      jun: 5,
+      jul: 6,
+      aug: 7, ago: 7,
+      sep: 8,
+      oct: 9,
+      nov: 10,
+      dec: 11, dic: 11
     };
-    const match = value.trim().toLowerCase().match(/^(\d{1,2})[\/\- ]([a-z]{3})[\/\- ](\d{4})$/);
-    if (match) {
-      const day = parseInt(match[1], 10);
-      const month = months[match[2]];
-      const year = parseInt(match[3], 10);
-      if (month !== undefined) return new Date(Date.UTC(year, month, day));
+
+    // Formato: dd-mmm-yy o dd-mmm-yyyy (ej: 23-oct-25)
+    const match1 = trimmed.toLowerCase().match(/^(\d{1,2})[\/\-]([a-z]{3})[\/\-](\d{2,4})$/);
+    if (match1) {
+      const day = parseInt(match1[1], 10);
+      const monthAbbr = match1[2];
+      let year = parseInt(match1[3], 10);
+      
+      // Ajustar año de 2 dígitos
+      if (year < 100) {
+        year += 2000;
+      }
+      
+      const month = months[monthAbbr];
+      
+      console.log('📅 Parseando fecha:', { original: trimmed, day, month, year, monthAbbr });
+      
+      if (month !== undefined) {
+        // Crear fecha en UTC con hora exacta en medianoche
+        const result = new Date(Date.UTC(year, month, day, 0, 0, 0, 0));
+        console.log('✅ Fecha creada:', result.toISOString());
+        return result;
+      }
+    }
+
+    // Formato: MM/DD/YYYY o DD/MM/YYYY
+    const match2 = trimmed.match(/^(\d{1,2})\/(\d{1,2})\/(\d{4})$/);
+    if (match2) {
+      let month = parseInt(match2[1], 10);
+      let day = parseInt(match2[2], 10);
+      const year = parseInt(match2[3], 10);
+      
+      // Si el mes es mayor a 12, asumimos formato DD/MM/YYYY
+      if (month > 12) {
+        [month, day] = [day, month];
+      }
+      
+      return new Date(Date.UTC(year, month - 1, day, 0, 0, 0, 0));
+    }
+
+    // Fallback: intentar parsear directamente
+    const parsedDate = new Date(trimmed);
+    if (!isNaN(parsedDate.getTime())) {
+      return new Date(Date.UTC(
+        parsedDate.getUTCFullYear(),
+        parsedDate.getUTCMonth(),
+        parsedDate.getUTCDate(),
+        0, 0, 0, 0
+      ));
     }
   }
 
-  const date = new Date(value);
-  return isNaN(date.getTime()) ? value : new Date(Date.UTC(date.getFullYear(), date.getMonth(), date.getDate()));
+  // Si no se pudo parsear, devolver el valor original
+  return value;
 }
+
 // ---------------- POST ----------------
 export async function POST(request: Request) {
   try {

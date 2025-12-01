@@ -124,6 +124,7 @@ export function PurchaseList() {
                         year: "numeric",
                         month: "long",
                         day: "numeric",
+                        timeZone: "UTC" // ← Agregar esto para forzar UTC
                       })}
                     </p>
                     <Badge variant="outline">No. Pedido: {purchase.noPedido || "Sin definir sucursal"}</Badge>

@@ -1,14 +1,13 @@
 "use client"
 
 import { useState, useEffect, useRef } from "react"
-import type { Branch, CartItem, Customer, InventoryProduct, NewSale, SaleReceipt } from "@/lib/types"
+import type { Branch, CartItem, Customer, InventoryProduct, SaleReceipt } from "@/lib/types"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
-import { Search, ShoppingCart, Trash2, FileText } from "lucide-react"
-import { Badge } from "@/components/ui/badge"
+import { Search, ShoppingCart, Trash2, FileText, Check } from "lucide-react"
 import { Separator } from "@/components/ui/separator"
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog"
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
@@ -20,13 +19,39 @@ import { getCustomers } from "@/app/actions/customers/get-customers"
 import { processProductsSale } from "@/app/actions/sales/process-products-sale"
 import { getQuoteSales } from "@/app/actions/sales/get-quote-sales"
 import { useSession } from "next-auth/react"
+import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group"
 
+// Definir tipos
+type SaleType = "remision" | "credito" | "cotizacion"
+
+// Configuración de opciones
+const SALE_TYPE_OPTIONS: Array<{
+  value: SaleType
+  label: string
+  description: string
+}> = [
+  {
+    value: "remision",
+    label: "Remisión",
+    description: "Se cobra y descuenta del inventario",
+  },
+  {
+    value: "credito",
+    label: "Venta a Crédito",
+    description: "Se descuenta del inventario. Requiere confirmación de pago posterior.",
+  },
+  {
+    value: "cotizacion",
+    label: "Cotización",
+    description: "No se cobra ni descuenta del inventario",
+  },
+]
 
 interface POSInterfaceProps {
   branches: Branch[]
   userId: string
   userBranchId: string | null
-  allowBranchChange?: boolean // New prop to control if branch can be changed
+  allowBranchChange?: boolean
 }
 
 export function POSInterface({ branches, userId, userBranchId, allowBranchChange = false }: POSInterfaceProps) {
@@ -50,32 +75,35 @@ export function POSInterface({ branches, userId, userBranchId, allowBranchChange
   const [selectedProductForCustomPrice, setSelectedProductForCustomPrice] = useState<InventoryProduct | null>(null)
   const [productCustomPrices, setProductCustomPrices] = useState<Record<string, Record<string, number>>>({})
   const [saleType, setSaleType] = useState<"remision" | "credito" | "cotizacion">("remision")
-  const initialLoadDone = useRef(false);  // Usamos useRef para mantener un estado mutable sin re-renderizar
 
+  const [customerSearchValue, setCustomerSearchValue] = useState("Público en general")
+  const [showCustomerDropdown, setShowCustomerDropdown] = useState(false)
+  const customerInputRef = useRef<HTMLDivElement>(null)
+
+  const initialLoadDone = useRef(false)
   const { data: session } = useSession()
-
 
   useEffect(() => {
     if (!initialLoadDone.current) {
-      initialLoadDone.current = true;
-      loadProducts();
-      loadCustomers();
+      initialLoadDone.current = true
+      loadProducts()
+      loadCustomers()
     }
   }, [])
 
   useEffect(() => {
     const urlParams = new URLSearchParams(window.location.search)
     const convertQuoteId = urlParams.get("convertQuote")
-    if (!products.length || !convertQuoteId) return; // espera a que ambos existan
+    if (!products.length || !convertQuoteId) return
     if (convertQuoteId) {
       loadQuoteForConversion(convertQuoteId)
     }
-  }, [products]);
+  }, [products])
 
   useEffect(() => {
-    if (!products.length) return; // espera a que ambos existan
+    if (!products.length) return
     loadAllCustomPrices()
-  }, [products]);
+  }, [products])
 
   const loadProducts = async () => {
     try {
@@ -106,23 +134,17 @@ export function POSInterface({ branches, userId, userBranchId, allowBranchChange
   }
 
   const loadAllCustomPrices = async () => {
-    const pricesMap: Record<string, Record<string, number>> = {};
-
+    const pricesMap: Record<string, Record<string, number>> = {}
     products.forEach((product: any) => {
-      // Verifica que customPrices exista y sea un array
       if (product.customPrices && product.customPrices.length > 0) {
-        // Inicializa el objeto para este producto
-        pricesMap[product._id] = {};
-
-        // Itera sobre los precios personalizados
+        pricesMap[product._id] = {}
         product.customPrices.forEach((customPrice: any) => {
-          pricesMap[product._id][customPrice.price_name] = customPrice.price_value;
-        });
+          pricesMap[product._id][customPrice.price_name] = customPrice.price_value
+        })
       }
-    });
-
-    setProductCustomPrices(pricesMap);
-  };
+    })
+    setProductCustomPrices(pricesMap)
+  }
 
   useEffect(() => {
     onSaleTypeChange()
@@ -133,17 +155,16 @@ export function POSInterface({ branches, userId, userBranchId, allowBranchChange
     const checkedCart = cartToCheck.map((item) => {
       let quantity = item.quantity
       if (item.quantity > item.product.cantidad) quantity = item.product.cantidad
-      return ({
+      return {
         ...item,
-        quantity
-      })
+        quantity,
+      }
     })
     setCart(checkedCart)
   }
 
   const addToCart = (product: InventoryProduct, priceType: "retail" | "wholesale" | "custom", customPrice?: number) => {
     const existingItem = cart.find((item) => item.product.codigo === product.codigo && item.price_type === priceType)
-
     let unitPrice = product.precioPublicoConIVA
     if (priceType === "wholesale") unitPrice = product.precioMayoreoConIVA
     if (priceType === "custom" && customPrice) unitPrice = customPrice
@@ -174,7 +195,6 @@ export function POSInterface({ branches, userId, userBranchId, allowBranchChange
       updated[index].quantity = updatedItem.product.cantidad
       return
     }
-
     updated[index].quantity = quantity
     setCart(updated)
   }
@@ -194,32 +214,29 @@ export function POSInterface({ branches, userId, userBranchId, allowBranchChange
       alert("Selecciona una sucursal")
       return
     }
-
     if (cart.length === 0) {
       alert("El carrito está vacío")
       return
     }
-
     if (saleType === "credito" && selectedCustomer === "none") {
       alert("Las ventas a crédito requieren un cliente")
       return
     }
-
     if (saleType === "remision") {
       const payment = Number.parseFloat(paymentReceived) || 0
       const total = calculateTotal()
-
       if (payment < total) {
         alert("El pago recibido es insuficiente para una remisión")
         return
       }
     }
-
     if (saleType !== "cotizacion") {
       let hasGreaterQuantity = false
       for (const item of cart) {
         if (item.quantity > item.product.cantidad) {
-          alert(`La cantidad del producto ${item.product.descripcion} excede la cantidad en existencia que es: ${item.product.cantidad}`)
+          alert(
+            `La cantidad del producto ${item.product.descripcion} excede la cantidad en existencia que es: ${item.product.cantidad}`,
+          )
           hasGreaterQuantity = true
         }
       }
@@ -227,12 +244,10 @@ export function POSInterface({ branches, userId, userBranchId, allowBranchChange
     }
 
     setIsProcessing(true)
-
     try {
       const customerId = selectedCustomer === "none" ? null : selectedCustomer
       const total = calculateTotal()
       const payment = saleType === "cotizacion" ? 0 : Number.parseFloat(paymentReceived) || 0
-
       const urlParams = new URLSearchParams(window.location.search)
       const parentQuoteId = urlParams.get("convertQuote")
 
@@ -244,48 +259,49 @@ export function POSInterface({ branches, userId, userBranchId, allowBranchChange
         change_given: saleType === "cotizacion" ? 0 : Math.max(0, payment - total),
         created_by: userId,
         sale_type: saleType,
-        payment_status: saleType === "credito" ? "pending" : saleType === "cotizacion" ? "pending" : "paid" as "pending" | "confirmed" | "paid",
+        payment_status:
+          saleType === "credito"
+            ? "pending"
+            : saleType === "cotizacion"
+              ? "pending"
+              : ("paid" as "pending" | "confirmed" | "paid"),
         parent_sale_id: parentQuoteId || null,
         cart,
-        created_by_user: session?.user?.username 
-        }
+        created_by_user: session?.user?.username,
+      }
 
       const { data: saleData, error: saleError } = await processProductsSale(sale)
-
       if (saleError) throw saleError
-
       if (!saleData) {
         throw new Error("No se obtuvieron los datos de la venta")
       }
 
       const saleItems = saleData.sale_items.map((saleItem) => {
-        const product = products.find(
-          (product) => product.codigo === saleItem.product_code
-        );
-
+        const product = products.find((product) => product.codigo.toString() === saleItem.product_code)
         return {
           ...saleItem,
           product: {
             name: product?.descripcion ?? "",
-            truper_code: product?.codigo ?? "",
+            truper_code: (product?.codigo ?? "").toString(),
             brand: product?.marca ?? "",
           },
-        };
-      });
+        }
+      })
 
       const saleReceipt: SaleReceipt = {
         ...saleData,
+        sale_type: saleType, // Add sale_type from component state
         sale_items: saleItems,
-      };
+      }
 
-      setReceiptData(saleReceipt);
+      setReceiptData(saleReceipt)
       setLastSaleId(saleData.id)
       setShowReceipt(true)
       setCart([])
       setSelectedCustomer("none")
+      setCustomerSearchValue("Público en general") // Reset to default
       setPaymentReceived("")
       setSaleType("remision")
-
       if (parentQuoteId) {
         window.history.replaceState({}, "", window.location.pathname)
       }
@@ -321,70 +337,88 @@ export function POSInterface({ branches, userId, userBranchId, allowBranchChange
         console.error("Error al cargar cotización:", error)
         return
       }
-
       let skippedProducts = ""
-
       const cartItems: CartItem[] = data.sale_items.reduce((acc: CartItem[], item: any) => {
-        const product = products.find((p) => p.codigo === item.product_code);
+        const product = products.find((p) => p.codigo === item.product_code)
         if (!product) {
           skippedProducts += `, ${item.product_code}`
-          return acc;
-        } // si no lo encuentra, simplemente no lo agrega
-
+          return acc
+        }
         acc.push({
           product,
           quantity: item.quantity,
           unit_price: item.unit_price,
-          price_type: "custom", // Marcar como personalizado ya que estamos utilizando el precio cotizado
-        });
-
-        return acc;
-      }, []);
+          price_type: "custom",
+        })
+        return acc
+      }, [])
 
       setCart(cartItems)
-
       if (data.customer_id) {
         setSelectedCustomer(data.customer_id)
+        const customer = customers.find((c) => c.id === data.customer_id)
+        if (customer) {
+          setCustomerSearchValue(customer.name)
+        }
       }
-
       if (data.branch_id) {
         setBranchId(data.branch_id)
       }
-
       if (skippedProducts !== "") {
-        alert(`Cotización cargada sin los siguientes productos${skippedProducts}. Selecciona el tipo de venta y completa la transacción.`)
+        alert(
+          `Cotización cargada sin los siguientes productos${skippedProducts}. Selecciona el tipo de venta y completa la transacción.`,
+        )
       } else {
         alert("Cotización completamente cargada. Selecciona el tipo de venta y completa la transacción.")
       }
-
-
     } catch (error) {
       console.error("Error loading quote:", error)
       alert("Error al cargar la cotización")
     }
   }
 
-
-
   const filteredProducts = products.filter((product) => {
     const matchesSearch =
       product.descripcion?.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      product.codigo?.toLowerCase().includes(searchTerm.toLowerCase()) ||
+      product.codigo?.toString().toLowerCase().includes(searchTerm.toLowerCase()) ||
       product.barcode?.toLowerCase().includes(searchTerm.toLowerCase()) ||
       product.clave?.toLowerCase().includes(searchTerm.toLowerCase())
-
     const matchesBrand = brandFilter === "all" || product.marca === brandFilter
     const matchesLine = familyDescriptionFilter === "all" || product.descripcionFamilia === familyDescriptionFilter
-    const selectedBranch = branches.find((branch) => (branch.id === branchId))
+    const selectedBranch = branches.find((branch) => branch.id === branchId)
     const matchesBranch = product.branch === selectedBranch?.name
     return matchesSearch && matchesBrand && matchesLine && matchesBranch
   })
+
+  // Filtrar clientes: si el valor de búsqueda es vacío o "Público en general", mostrar todos
+  const filteredCustomers = 
+    !customerSearchValue || customerSearchValue === "Público en general"
+      ? customers
+      : customers.filter((customer) =>
+          customer.name.toLowerCase().includes(customerSearchValue.toLowerCase()),
+        )
 
   const uniqueBrands = [...new Set(products.map((p) => p.marca).filter(Boolean))] as string[]
   const uniqueFamilyDescriptions = [...new Set(products.map((p) => p.descripcionFamilia).filter(Boolean))] as string[]
 
   const total = calculateTotal()
   const change = calculateChange()
+
+  const selectedCustomerName =
+    selectedCustomer === "none" ? "Público en general" : customers.find((c) => c.id === selectedCustomer)?.name || ""
+
+  useEffect(() => {
+    const handleClickOutside = (event: MouseEvent) => {
+      if (customerInputRef.current && !customerInputRef.current.contains(event.target as Node)) {
+        setShowCustomerDropdown(false)
+      }
+    }
+
+    document.addEventListener("mousedown", handleClickOutside)
+    return () => {
+      document.removeEventListener("mousedown", handleClickOutside)
+    }
+  }, [])
 
   return (
     <div className="grid grid-cols-1 lg:grid-cols-3 gap-4 lg:gap-6 p-2 sm:p-4">
@@ -424,7 +458,6 @@ export function POSInterface({ branches, userId, userBranchId, allowBranchChange
                   />
                 </div>
               </div>
-
               <div className="grid grid-cols-2 sm:flex gap-2 sm:gap-3">
                 <Select value={brandFilter} onValueChange={setBrandFilter}>
                   <SelectTrigger className="w-full sm:w-40 h-9 sm:h-10 text-xs sm:text-sm">
@@ -439,7 +472,6 @@ export function POSInterface({ branches, userId, userBranchId, allowBranchChange
                     ))}
                   </SelectContent>
                 </Select>
-
                 <Select value={familyDescriptionFilter} onValueChange={setFamilyDescriptionFilter}>
                   <SelectTrigger className="w-full sm:w-40 h-9 sm:h-10 text-xs sm:text-sm">
                     <SelectValue placeholder="Todas las líneas" />
@@ -455,7 +487,6 @@ export function POSInterface({ branches, userId, userBranchId, allowBranchChange
                 </Select>
               </div>
             </div>
-
             <div className="max-h-[50vh] sm:max-h-96 overflow-y-auto border rounded-md">
               {filteredProducts.length === 0 ? (
                 <div className="p-6 sm:p-8 text-center text-muted-foreground text-sm">
@@ -468,8 +499,6 @@ export function POSInterface({ branches, userId, userBranchId, allowBranchChange
                   {filteredProducts.map((product) => {
                     const customPrices = productCustomPrices[product._id] || {}
                     const hasCustomPrices = Object.keys(customPrices).length > 0
-                    // const characteristics = product.characteristics as Record<string, string> | null
-
                     return (
                       <div
                         key={product._id}
@@ -483,17 +512,13 @@ export function POSInterface({ branches, userId, userBranchId, allowBranchChange
                               {product.descripcion?.substring(0, 2).toUpperCase()}
                             </AvatarFallback>
                           </Avatar>
-
                           <div className="flex-1 min-w-0 w-full">
                             <h3 className="font-semibold text-base sm:text-xl text-center sm:text-left">
                               {product.descripcion}
                             </h3>
-
                             <div className="flex flex-wrap items-center justify-center sm:justify-start gap-2 sm:gap-3 mt-1 text-xs sm:text-sm">
                               {product.codigo && (
-                                <span className="text-sm sm:text-base font-bold text-primary">
-                                  {product.codigo}
-                                </span>
+                                <span className="text-sm sm:text-base font-bold text-primary">{product.codigo}</span>
                               )}
                               {product.marca && (
                                 <span className="text-muted-foreground text-xs sm:text-sm">
@@ -512,7 +537,6 @@ export function POSInterface({ branches, userId, userBranchId, allowBranchChange
                               )}
                             </div>
                           </div>
-
                           <div className="flex flex-col gap-2 w-full sm:w-auto" onClick={(e) => e.stopPropagation()}>
                             <div className="grid grid-cols-2 gap-2">
                               <div
@@ -522,7 +546,9 @@ export function POSInterface({ branches, userId, userBranchId, allowBranchChange
                                 <div className="text-[10px] sm:text-xs text-muted-foreground mb-0.5 sm:mb-1">
                                   Público
                                 </div>
-                                <div className="text-base sm:text-lg font-bold">${product.precioPublicoConIVA?.toFixed(2)}</div>
+                                <div className="text-base sm:text-lg font-bold">
+                                  ${product.precioPublicoConIVA?.toFixed(2)}
+                                </div>
                               </div>
                               <div
                                 className="border rounded-md p-2 sm:p-3 cursor-pointer hover:bg-slate-100 transition-colors min-w-[100px] sm:min-w-[110px]"
@@ -579,7 +605,6 @@ export function POSInterface({ branches, userId, userBranchId, allowBranchChange
                         : item.price_type === "wholesale"
                           ? "Mayoreo"
                           : "Personalizado"
-
                     return (
                       <div
                         key={index}
@@ -618,38 +643,33 @@ export function POSInterface({ branches, userId, userBranchId, allowBranchChange
                     )
                   })}
                 </div>
-
                 <Separator />
-
                 <div className="space-y-2">
                   <div className="flex justify-between text-base sm:text-lg font-semibold">
                     <span>Total:</span>
                     <span>${total.toFixed(2)}</span>
                   </div>
                 </div>
-
-                <div className="space-y-2">
+                <div className="space-y-3">
                   <Label className="text-xs sm:text-sm">Tipo de Venta</Label>
-                  <Select value={saleType} onValueChange={(value: any) => setSaleType(value)}>
-                    <SelectTrigger className="h-9 sm:h-10 text-xs sm:text-sm">
-                      <SelectValue />
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="remision">Remisión</SelectItem>
-                      <SelectItem value="credito">Venta a Crédito</SelectItem>
-                      <SelectItem value="cotizacion">Cotización</SelectItem>
-                    </SelectContent>
-                  </Select>
-                  {saleType === "remision" && (
-                    <p className="text-xs text-muted-foreground">Se cobra y descuenta del inventario</p>
-                  )}
-                  {saleType === "credito" && (
+                  <RadioGroup
+                    value={saleType}
+                    onValueChange={(value) => setSaleType(value as SaleType)}
+                    className="flex flex-wrap gap-4"
+                  >
+                    {SALE_TYPE_OPTIONS.map((option) => (
+                      <div key={option.value} className="flex items-center space-x-2">
+                        <RadioGroupItem value={option.value} id={option.value} />
+                        <Label htmlFor={option.value} className="text-xs sm:text-sm font-medium cursor-pointer">
+                          {option.label}
+                        </Label>
+                      </div>
+                    ))}
+                  </RadioGroup>
+                  {saleType && (
                     <p className="text-xs text-muted-foreground">
-                      Se descuenta del inventario. Requiere confirmación de pago posterior.
+                      {SALE_TYPE_OPTIONS.find((opt) => opt.value === saleType)?.description}
                     </p>
-                  )}
-                  {saleType === "cotizacion" && (
-                    <p className="text-xs text-muted-foreground">No se cobra ni descuenta del inventario</p>
                   )}
                 </div>
 
@@ -658,19 +678,73 @@ export function POSInterface({ branches, userId, userBranchId, allowBranchChange
                     Cliente {saleType === "credito" && <span className="text-destructive">*</span>}
                     {saleType === "credito" ? " (obligatorio)" : " (opcional)"}
                   </Label>
-                  <Select value={selectedCustomer} onValueChange={setSelectedCustomer}>
-                    <SelectTrigger className="h-9 sm:h-10 text-xs sm:text-sm">
-                      <SelectValue placeholder="Sin cliente" />
-                    </SelectTrigger>
-                    <SelectContent>
-                      {saleType !== "credito" && <SelectItem value="none">Sin cliente</SelectItem>}
-                      {customers.map((customer) => (
-                        <SelectItem key={customer.id} value={customer.id}>
-                          {customer.name}
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
+                  <div className="relative" ref={customerInputRef}>
+                    <div className="relative">
+                      <Search className="absolute left-3 top-1/2 h-3.5 w-3.5 sm:h-4 sm:w-4 -translate-y-1/2 text-muted-foreground" />
+                      <Input
+                        id="customer"
+                        type="text"
+                        placeholder="Buscar cliente..."
+                        value={customerSearchValue}
+                        onChange={(e) => {
+                          setCustomerSearchValue(e.target.value)
+                          setShowCustomerDropdown(true)
+                        }}
+                        onFocus={() => setShowCustomerDropdown(true)}
+                        className="pl-8 sm:pl-9 h-9 sm:h-10 text-xs sm:text-sm"
+                      />
+                    </div>
+                    {showCustomerDropdown && (
+                      <div className="absolute z-50 w-full mt-1 bg-popover border rounded-md shadow-md max-h-60 overflow-y-auto">
+                        <div className="p-2 text-xs text-muted-foreground font-medium border-b">Clientes</div>
+                        {saleType !== "credito" && (
+                          <div
+                            className="flex items-center justify-between px-3 py-2.5 text-xs sm:text-sm cursor-pointer hover:bg-accent transition-colors"
+                            onClick={() => {
+                              setSelectedCustomer("none")
+                              setCustomerSearchValue("Público en general")
+                              setShowCustomerDropdown(false)
+                            }}
+                          >
+                            <div className="flex items-center gap-2">
+                              <div className="h-8 w-8 rounded-md bg-muted flex items-center justify-center text-xs font-semibold">
+                                PG
+                              </div>
+                              <span>Público en general</span>
+                            </div>
+                            {selectedCustomer === "none" && <Check className="h-4 w-4 text-primary" />}
+                          </div>
+                        )}
+                        {filteredCustomers.length > 0 ? (
+                          filteredCustomers.map((customer) => (
+                            <div
+                              key={customer.id}
+                              className="flex items-center justify-between px-3 py-2.5 text-xs sm:text-sm cursor-pointer hover:bg-accent transition-colors"
+                              onClick={() => {
+                                setSelectedCustomer(customer.id)
+                                setCustomerSearchValue(customer.name)
+                                setShowCustomerDropdown(false)
+                              }}
+                            >
+                              <div className="flex items-center gap-2">
+                                <div className="h-8 w-8 rounded-md bg-muted flex items-center justify-center text-xs font-semibold">
+                                  {customer.name.substring(0, 2).toUpperCase()}
+                                </div>
+                                <div className="flex flex-col">
+                                  <span className="font-medium">{customer.name}</span>
+                                </div>
+                              </div>
+                              {selectedCustomer === customer.id && <Check className="h-4 w-4 text-primary" />}
+                            </div>
+                          ))
+                        ) : customerSearchValue && customerSearchValue !== "Público en general" ? (
+                          <div className="px-3 py-2 text-xs sm:text-sm text-muted-foreground">
+                            No se encontró el cliente
+                          </div>
+                        ) : null}
+                      </div>
+                    )}
+                  </div>
                 </div>
 
                 {saleType !== "cotizacion" && (
@@ -690,7 +764,6 @@ export function POSInterface({ branches, userId, userBranchId, allowBranchChange
                         className="h-9 sm:h-10 text-sm"
                       />
                     </div>
-
                     {paymentReceived && (
                       <div className="flex justify-between text-xs sm:text-sm">
                         <span>Cambio:</span>
@@ -701,13 +774,12 @@ export function POSInterface({ branches, userId, userBranchId, allowBranchChange
                     )}
                   </>
                 )}
-
                 <Button
                   className="w-full text-sm sm:text-base h-10 sm:h-11"
                   onClick={processSale}
                   disabled={
                     isProcessing ||
-                    (saleType === "remision" && change < 0) || // Only validate payment for remision, not credito
+                    (saleType === "remision" && change < 0) ||
                     (saleType === "credito" && selectedCustomer === "none")
                   }
                 >
@@ -772,13 +844,11 @@ export function POSInterface({ branches, userId, userBranchId, allowBranchChange
             <DialogHeader>
               <DialogTitle className="text-center">Venta Completada</DialogTitle>
             </DialogHeader>
-
             <div className="space-y-6">
               <div className="text-center space-y-2 p-4 bg-emerald-50 rounded-lg">
                 <p className="text-3xl font-bold text-emerald-600">${receiptData.total_amount.toFixed(2)}</p>
                 <p className="text-sm text-muted-foreground">Total de la venta</p>
               </div>
-
               <div className="grid grid-cols-2 gap-4 p-4 bg-muted/50 rounded-lg text-sm">
                 <div>
                   <p className="text-muted-foreground">Fecha</p>
@@ -801,7 +871,6 @@ export function POSInterface({ branches, userId, userBranchId, allowBranchChange
                   <p className="font-medium">{receiptData.customer?.name || "Cliente General"}</p>
                 </div>
               </div>
-
               <div>
                 <h3 className="font-semibold mb-3">Productos</h3>
                 <div className="rounded-md border">
@@ -834,9 +903,7 @@ export function POSInterface({ branches, userId, userBranchId, allowBranchChange
                   </Table>
                 </div>
               </div>
-
               <Separator />
-
               <div className="space-y-2 p-4 bg-muted/50 rounded-lg">
                 <div className="flex justify-between items-center text-lg">
                   <span className="font-semibold">Total:</span>
@@ -851,7 +918,6 @@ export function POSInterface({ branches, userId, userBranchId, allowBranchChange
                   <span className="font-semibold text-emerald-600">${receiptData.change_given.toFixed(2)}</span>
                 </div>
               </div>
-
               <div className="grid grid-cols-2 gap-3">
                 <Button
                   variant="outline"
