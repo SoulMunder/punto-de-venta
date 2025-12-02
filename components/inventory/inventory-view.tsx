@@ -106,6 +106,77 @@ export function InventoryView({
 
   const productCodeRef = useRef<HTMLInputElement | null>(null)
 
+  // Agregar estos estados al componente
+  const [searchResults, setSearchResults] = useState<Product[]>([])
+  const [showSuggestions, setShowSuggestions] = useState(false)
+  const [isSearching, setIsSearching] = useState(false)
+  const requestIdRef = useRef(0)
+
+  useEffect(() => {
+    if (!manualModalOpen) {
+      setSearchResults([])
+      return
+    }
+
+    const controller = new AbortController()
+    const signal = controller.signal
+
+    const fetchResults = async () => {
+      if (!productCode.trim()) {
+        setSearchResults([])
+        return
+      }
+
+      // Marcar este request con un ID único
+      const requestId = ++requestIdRef.current
+      setIsSearching(true)
+
+      try {
+        const res = await fetch(
+          `/api/products/search?q=${encodeURIComponent(productCode)}&limit=5`,
+          { signal }
+        )
+        if (!res.ok) throw new Error("Error buscando productos")
+        const data = await res.json()
+
+        // Solo aplicar resultados si este es el request más reciente
+        if (requestId === requestIdRef.current) {
+          setSearchResults(data)
+        }
+      } catch (err: any) {
+        if (err.name === "AbortError") return // petición cancelada
+        console.error("Error buscando productos:", err)
+        // Solo limpiar si este es el request más reciente
+        if (requestId === requestIdRef.current) {
+          setSearchResults([])
+        }
+      } finally {
+        // Solo desactivar loading si este es el request más reciente
+        if (requestId === requestIdRef.current) {
+          setIsSearching(false)
+        }
+      }
+    }
+
+    // Ejecutar inmediatamente (sin debounce)
+    fetchResults()
+
+    // Cleanup: cancelar petición anterior si cambia productCode
+    return () => controller.abort()
+  }, [productCode, manualModalOpen])
+
+
+  // Función para seleccionar un producto sugerido
+  const seleccionarProducto = (product: Product) => {
+    // Guardar el código y mantener la sugerencia seleccionada en la lista
+    // para que al reabrir el input no aparezca "No se encontraron productos".
+    setProductCode(String(product.codigo))
+    setShowSuggestions(false)
+    setSearchResults([product])
+    // Opcionalmente enfocar el siguiente campo
+    document.getElementById('quantity')?.focus()
+  }
+
   const handleManualSubmit = (e: React.FormEvent) => {
     e.preventDefault()
     if (!productCode || !quantity || !selectedBranchManual) {
@@ -801,16 +872,83 @@ export function InventoryView({
           </DialogHeader>
           <form onSubmit={handleManualSubmit}>
             <div className="grid gap-4 py-4">
-              <div className="grid gap-2">
+              <div className="grid gap-2 relative">
                 <Label htmlFor="productCode">Código del producto</Label>
-                <Input
-                  ref={productCodeRef}
-                  id="productCode"
-                  value={productCode}
-                  onChange={(e) => setProductCode(e.target.value)}
-                  placeholder="Ingresa el código"
-                  disabled={isSubmitting}
-                />
+                <div className="relative">
+                  <Input
+                    ref={productCodeRef}
+                    id="productCode"
+                    value={productCode}
+                    onChange={(e) => {
+                      setProductCode(e.target.value)
+                      setShowSuggestions(true)
+                    }}
+                    onFocus={() => setShowSuggestions(true)}
+                    onBlur={() => {
+                      // Delay para permitir click en sugerencias
+                      setTimeout(() => setShowSuggestions(false), 200)
+                    }}
+                    placeholder="Ingresa el código"
+                    disabled={isSubmitting}
+                    autoComplete="off"
+                  />
+
+                  {/* Indicador de búsqueda */}
+                  {isSearching && (
+                    <div className="absolute right-3 top-1/2 -translate-y-1/2">
+                      <span className="h-4 w-4 border-2 border-t-transparent border-primary rounded-full animate-spin inline-block"></span>
+                    </div>
+                  )}
+                </div>
+
+                {/* Lista de sugerencias */}
+                {showSuggestions && searchResults.length > 0 && (
+                  <div className="absolute top-full left-0 right-0 z-50 mt-1 bg-popover border rounded-md shadow-md max-h-[200px] overflow-y-auto">
+                    {searchResults.map((product) => (
+                      <button
+                        key={product._id}
+                        type="button"
+                        onMouseDown={(e) => {
+                          e.preventDefault() // Previene que se dispare el blur
+                          seleccionarProducto(product)
+                        }}
+                        className="w-full px-3 py-2 text-left hover:bg-muted transition-colors flex items-start gap-2 border-b last:border-b-0"
+                      >
+                        <div className="flex-1 min-w-0">
+                          <div className="flex items-center gap-2 mb-1">
+                            <span className="font-medium text-sm">{product.codigo}</span>
+                            {product.ean && (
+                              <span className="text-xs text-muted-foreground">
+                                EAN: {product.ean}
+                              </span>
+                            )}
+                          </div>
+                          <p className="text-xs text-muted-foreground truncate">
+                            {product.descripcion}
+                          </p>
+                          <div className="flex gap-2 mt-1">
+                            <Badge variant="secondary" className="text-[10px] px-1 py-0">
+                              {product.marca}
+                            </Badge>
+                            <span className="text-[10px] text-muted-foreground">
+                              ${Number(product.precioPublicoConIVA).toFixed(2)}
+                            </span>
+                          </div>
+                        </div>
+                      </button>
+
+                    ))}
+                  </div>
+                )}
+
+                {/* Mensaje cuando no hay resultados */}
+                {showSuggestions && !isSearching && productCode.length >= 2 && searchResults.length === 0 && (
+                  <div className="absolute top-full left-0 right-0 z-50 mt-1 bg-popover border rounded-md shadow-md p-3">
+                    <p className="text-xs text-muted-foreground text-center">
+                      No se encontraron productos con ese código
+                    </p>
+                  </div>
+                )}
               </div>
 
               <div className="grid gap-2">
