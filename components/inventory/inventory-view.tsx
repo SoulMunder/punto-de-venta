@@ -1,11 +1,11 @@
 "use client"
-
 import type React from "react"
 
 import { useState, useEffect, useRef } from "react"
 import type { Branch, Product } from "@/lib/types"
 import { Input } from "@/components/ui/input"
-import { Search, Eye, Package, Pencil, Trash2, Plus, X, Upload } from "lucide-react"
+import { Search, Eye, Package, Pencil, Trash2, Plus, X, Upload, List, LayoutGrid } from "lucide-react"
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
@@ -36,6 +36,7 @@ import {
 import { DataTablePagination } from "./data-table-pagination"
 import { Skeleton } from "@/components/ui/skeleton"
 import { toast } from "sonner"
+import { cn } from "@/lib/utils"
 
 interface ProductWithInventory extends Product {
   cantidad: number
@@ -44,6 +45,7 @@ interface ProductWithInventory extends Product {
     address: string
   }
   lowStockThreshold: number
+  customPrices?: Array<{ price_name: string; price_value: number }>
 }
 
 interface InventoryViewProps {
@@ -97,16 +99,13 @@ export function InventoryView({
   const [isUpdating, setIsUpdating] = useState(false)
 
   const [searchTerm, setSearchTerm] = useState("")
+  const [viewMode, setViewMode] = useState<"grid" | "table">("grid")
   const [entriesPerPage, setEntriesPerPage] = useState(10)
   const [currentPage, setCurrentPage] = useState(1)
   const offset = (currentPage - 1) * entriesPerPage
 
-  const start = totalProducts === 0 ? 0 : offset + 1
-  const end = Math.min(currentPage * entriesPerPage, totalProducts)
-
   const productCodeRef = useRef<HTMLInputElement | null>(null)
 
-  // Agregar estos estados al componente
   const [searchResults, setSearchResults] = useState<Product[]>([])
   const [showSuggestions, setShowSuggestions] = useState(false)
   const [isSearching, setIsSearching] = useState(false)
@@ -127,54 +126,40 @@ export function InventoryView({
         return
       }
 
-      // Marcar este request con un ID único
       const requestId = ++requestIdRef.current
       setIsSearching(true)
 
       try {
-        const res = await fetch(
-          `/api/products/search?q=${encodeURIComponent(productCode)}&limit=5`,
-          { signal }
-        )
+        const res = await fetch(`/api/products/search?q=${encodeURIComponent(productCode)}&limit=5`, { signal })
         if (!res.ok) throw new Error("Error buscando productos")
         const data = await res.json()
 
-        // Solo aplicar resultados si este es el request más reciente
         if (requestId === requestIdRef.current) {
           setSearchResults(data)
         }
       } catch (err: any) {
-        if (err.name === "AbortError") return // petición cancelada
+        if (err.name === "AbortError") return
         console.error("Error buscando productos:", err)
-        // Solo limpiar si este es el request más reciente
         if (requestId === requestIdRef.current) {
           setSearchResults([])
         }
       } finally {
-        // Solo desactivar loading si este es el request más reciente
         if (requestId === requestIdRef.current) {
           setIsSearching(false)
         }
       }
     }
 
-    // Ejecutar inmediatamente (sin debounce)
     fetchResults()
 
-    // Cleanup: cancelar petición anterior si cambia productCode
     return () => controller.abort()
   }, [productCode, manualModalOpen])
 
-
-  // Función para seleccionar un producto sugerido
   const seleccionarProducto = (product: Product) => {
-    // Guardar el código y mantener la sugerencia seleccionada en la lista
-    // para que al reabrir el input no aparezca "No se encontraron productos".
     setProductCode(String(product.codigo))
     setShowSuggestions(false)
     setSearchResults([product])
-    // Opcionalmente enfocar el siguiente campo
-    document.getElementById('quantity')?.focus()
+    document.getElementById("quantity")?.focus()
   }
 
   const handleManualSubmit = (e: React.FormEvent) => {
@@ -248,10 +233,9 @@ export function InventoryView({
         .filter((item: any) => item.product)
         .map((item: any) => ({
           ...item.product!,
-          _id: item._id, // ID del documento de inventario
+          _id: item._id,
           cantidad: item.cantidad,
           branch: item.branch || { name: "", address: "" },
-          // 👇 Agregar campos adicionales del documento de inventario
           lowStockThreshold: item.lowStockThreshold,
           customPrices: item.customPrices || [],
         }))
@@ -351,7 +335,7 @@ export function InventoryView({
       let data: any = {}
       try {
         data = await res.json()
-      } catch { }
+      } catch {}
 
       if (!res.ok) {
         throw new Error(data.error || "Error eliminando producto")
@@ -410,24 +394,17 @@ export function InventoryView({
 
     setEditQuantity(product.cantidad.toString())
 
-    // Usar lowStockThreshold del producto o 10 por defecto
     setEditLowStockThreshold(
-      "lowStockThreshold" in product && product.lowStockThreshold
-        ? product.lowStockThreshold.toString()
-        : "10"
+      "lowStockThreshold" in product && product.lowStockThreshold ? product.lowStockThreshold.toString() : "10",
     )
 
     setCustomPrices(
-      product.customPrices?.map(p => ({
+      product.customPrices?.map((p) => ({
         price_name: p.price_name,
-        price_value: String(p.price_value)  // convertimos a string para el input
-      })) || []
-    );
+        price_value: String(p.price_value),
+      })) || [],
+    )
 
-
-
-
-    // Usar image_url del inventario o del producto
     const currentImage = "image_url" in product ? (product.image_url as string) || "" : ""
     setEditImageUrl(currentImage)
     setImagePreview(currentImage)
@@ -469,10 +446,12 @@ export function InventoryView({
     try {
       setIsUpdating(true)
 
-      const validCustomPrices = customPrices.filter((price) => price.price_name.trim() !== "" && price.price_value.trim() !== "")
+      const validCustomPrices = customPrices.filter(
+        (price) => price.price_name.trim() !== "" && price.price_value.trim() !== "",
+      )
 
       const payload = {
-        id: productToEdit._id, // 👈 Enviar el _id
+        id: productToEdit._id,
         cantidad: Number(editQuantity),
         lowStockThreshold: editLowStockThreshold ? Number(editLowStockThreshold) : 10,
         customPrices: validCustomPrices.map((price) => ({
@@ -532,9 +511,9 @@ export function InventoryView({
     setCustomPrices(updated)
   }
 
-  const getStockStatus = (quantity: number, lowStockThreshold: number = 10) => {
+  const getStockStatus = (quantity: number, lowStockThreshold = 10) => {
     if (quantity === 0) return { label: "Sin stock", variant: "destructive" as const }
-    if (quantity < lowStockThreshold) return { label: "Stock bajo", variant: "secondary" as const }
+    if (quantity <= lowStockThreshold) return { label: "Stock bajo", variant: "secondary" as const }
     return { label: "En stock", variant: "default" as const }
   }
 
@@ -545,88 +524,322 @@ export function InventoryView({
     <div className="space-y-4 sm:space-y-6 p-2 sm:p-4">
       <div className="flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-3 sm:gap-4">
         <div className="flex items-center gap-2 max-w-full sm:max-w-md">
-          <div className="flex items-center gap-2 max-w-full sm:max-w-md">
-            <div className="relative flex-1 flex gap-2">
-              <div className="relative flex-1">
-                <Search className="absolute left-3 top-1/2 h-3.5 w-3.5 sm:h-4 sm:w-4 -translate-y-1/2 text-muted-foreground" />
-                <Input
-                  placeholder="Buscar productos..."
-                  value={searchTerm}
-                  onChange={(e) => setSearchTerm(e.target.value)}
-                  className="pl-8 sm:pl-9 h-9 sm:h-10 text-xs sm:text-sm w-[25vw]"
-                />
-              </div>
-              <Select value={selectedBranch} onValueChange={setSelectedBranch}>
-                <SelectTrigger className="w-full sm:w-[200px]">
-                  <SelectValue placeholder="Todas las sucursales" />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="all">Todas las sucursales</SelectItem>
-                  {branches.map((branch) => (
-                    <SelectItem key={branch.name} value={branch.name}>
-                      {branch.name}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
+          <div className="flex items-center gap-2 flex-1">
+            <div className="relative flex-1">
+              <Search className="absolute left-3 top-1/2 h-3.5 w-3.5 sm:h-4 sm:w-4 -translate-y-1/2 text-muted-foreground" />
+              <Input
+                placeholder="Buscar productos..."
+                value={searchTerm}
+                onChange={(e) => setSearchTerm(e.target.value)}
+                className="pl-8 sm:pl-9 h-9 sm:h-10 text-xs sm:text-sm w-[25vw]"
+              />
             </div>
+
+            <Select value={selectedBranch} onValueChange={setSelectedBranch}>
+              <SelectTrigger className="w-full sm:w-[200px]">
+                <SelectValue placeholder="Todas las sucursales" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="all">Todas las sucursales</SelectItem>
+                {branches.map((branch) => (
+                  <SelectItem key={branch.name} value={branch.name}>
+                    {branch.name}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
           </div>
+        </div>
+
+        <div className="flex items-center justify-end">
+          <Button
+            variant={viewMode === "grid" ? "default" : "outline"}
+            size="sm"
+            onClick={() => setViewMode("grid")}
+            className="h-9 w-9 p-0"
+            aria-label="Vista en tarjetas"
+          >
+            <LayoutGrid className="h-4 w-4" />
+          </Button>
+
+          <Button
+            variant={viewMode === "table" ? "default" : "outline"}
+            size="sm"
+            onClick={() => setViewMode("table")}
+            className="ml-2 h-9 w-9 p-0"
+            aria-label="Vista en tabla"
+          >
+            <List className="h-4 w-4" />
+          </Button>
         </div>
       </div>
 
       {loading ? (
-        <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-5 gap-2 sm:gap-3">
-          {Array.from({ length: entriesPerPage }).map((_, index) => (
-            <Card key={index} className="overflow-hidden">
-              <CardHeader className="p-0">
-                <Skeleton className="aspect-[4/3] w-full" />
-              </CardHeader>
+        viewMode === "table" ? (
+          <div className={cn("rounded-lg border bg-card shadow-sm m-0")}>
+            <div style={{ height: "65vh" }}>
+              <Table>
+                <TableHeader
+                  className={cn("sticky top-0 z-10", "bg-muted backdrop-blur supports-[backdrop-filter]:bg-muted/95")}
+                >
+                  <TableRow className={cn("border-b bg-muted hover:bg-muted")}>
+                    <TableHead className="font-semibold text-foreground bg-muted">Código</TableHead>
+                    <TableHead className="font-semibold min-w-[250px] text-foreground bg-muted">Descripción</TableHead>
+                    <TableHead className="font-semibold text-foreground bg-muted">Marca</TableHead>
+                    <TableHead className="font-semibold text-foreground bg-muted">Familia</TableHead>
+                    <TableHead className="font-semibold text-foreground bg-muted">Sucursal</TableHead>
+                    <TableHead className="font-semibold text-center text-foreground bg-muted">Cantidad</TableHead>
+                    <TableHead className="font-semibold text-center text-foreground bg-muted">Estado</TableHead>
+                    <TableHead className="font-semibold text-center text-foreground bg-muted">Precio Público</TableHead>
+                    <TableHead className="text-center font-semibold text-foreground bg-muted">Acciones</TableHead>
+                  </TableRow>
+                </TableHeader>
 
-              <CardContent className="p-1.5 sm:p-2 space-y-1.5 sm:space-y-2">
-                <Skeleton className="h-11 w-full" />
+                <TableBody>
+                  {Array.from({ length: entriesPerPage }).map((_, index) => (
+                    <TableRow key={index} className="border-b">
+                      <TableCell>
+                        <Skeleton className="h-4 w-16" />
+                      </TableCell>
 
-                <div className="flex items-center gap-1">
-                  <Skeleton className="h-4 w-16" />
-                  <Skeleton className="h-4 w-20" />
-                </div>
+                      <TableCell>
+                        <div className="flex items-center gap-3">
+                          <Skeleton className="h-12 w-12 rounded-md" />
+                          <div className="flex-1 space-y-2">
+                            <Skeleton className="h-4 w-full max-w-[200px]" />
+                            <Skeleton className="h-3 w-3/4" />
+                          </div>
+                        </div>
+                      </TableCell>
 
-                <div className="flex gap-1.5 sm:gap-2">
-                  <Skeleton className="h-3 flex-1" />
-                  <Skeleton className="h-3 flex-1" />
-                </div>
+                      <TableCell>
+                        <Skeleton className="h-5 w-20" />
+                      </TableCell>
 
-                <div className="pt-1 border-t">
-                  <div className="grid grid-cols-3 gap-1.5 sm:gap-2">
-                    <div>
-                      <Skeleton className="h-2 w-12 mb-1" />
-                      <Skeleton className="h-4 w-16" />
-                    </div>
-                    <div>
-                      <Skeleton className="h-2 w-16 mb-1" />
-                      <Skeleton className="h-4 w-16" />
-                    </div>
-                    <div>
-                      <Skeleton className="h-2 w-14 mb-1" />
-                      <Skeleton className="h-4 w-16" />
+                      <TableCell>
+                        <Skeleton className="h-5 w-24" />
+                      </TableCell>
+
+                      <TableCell>
+                        <div className="flex items-center gap-2">
+                          <Skeleton className="h-2 w-2 rounded-full" />
+                          <Skeleton className="h-4 w-24" />
+                        </div>
+                      </TableCell>
+
+                      <TableCell className="text-center">
+                        <div className="flex justify-center">
+                          <Skeleton className="h-7 w-14 rounded-full" />
+                        </div>
+                      </TableCell>
+
+                      <TableCell className="text-center">
+                        <div className="flex justify-center">
+                          <Skeleton className="h-5 w-20" />
+                        </div>
+                      </TableCell>
+
+                      <TableCell className="text-center">
+                        <Skeleton className="h-6 w-20" />
+                      </TableCell>
+
+                      <TableCell className="text-center">
+                        <div className="flex items-center justify-center gap-1">
+                          <Skeleton className="h-8 w-8" />
+                          <Skeleton className="h-8 w-8" />
+                          <Skeleton className="h-8 w-8" />
+                        </div>
+                      </TableCell>
+                    </TableRow>
+                  ))}
+                </TableBody>
+              </Table>
+            </div>
+          </div>
+        ) : (
+          // Skeleton existente para vista grid
+          <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-5 gap-2 sm:gap-3">
+            {Array.from({ length: entriesPerPage }).map((_, index) => (
+              <Card key={index} className="overflow-hidden">
+                <CardHeader className="p-0">
+                  <Skeleton className="aspect-[4/3] w-full" />
+                </CardHeader>
+
+                <CardContent className="p-1.5 sm:p-2 space-y-1.5 sm:space-y-2">
+                  <Skeleton className="h-11 w-full" />
+
+                  <div className="flex items-center gap-1">
+                    <Skeleton className="h-4 w-16" />
+                    <Skeleton className="h-4 w-20" />
+                  </div>
+
+                  <div className="flex gap-1.5 sm:gap-2">
+                    <Skeleton className="h-3 flex-1" />
+                    <Skeleton className="h-3 flex-1" />
+                  </div>
+
+                  <div className="pt-1 border-t">
+                    <div className="grid grid-cols-3 gap-1.5 sm:gap-2">
+                      <div>
+                        <Skeleton className="h-2 w-12 mb-1" />
+                        <Skeleton className="h-4 w-16" />
+                      </div>
+                      <div>
+                        <Skeleton className="h-2 w-16 mb-1" />
+                        <Skeleton className="h-4 w-16" />
+                      </div>
+                      <div>
+                        <Skeleton className="h-2 w-14 mb-1" />
+                        <Skeleton className="h-4 w-16" />
+                      </div>
                     </div>
                   </div>
-                </div>
-              </CardContent>
+                </CardContent>
 
-              <CardFooter className="p-1.5 sm:p-2 pt-0 flex gap-0.5 sm:gap-1">
-                <Skeleton className="flex-1 h-6 sm:h-7" />
-                <Skeleton className="h-6 w-6 sm:h-7 sm:w-7" />
-                <Skeleton className="h-6 w-6 sm:h-7 sm:w-7" />
-              </CardFooter>
-            </Card>
-          ))}
-        </div>
+                <CardFooter className="p-1.5 sm:p-2 pt-0 flex gap-0.5 sm:gap-1">
+                  <Skeleton className="flex-1 h-6 sm:h-7" />
+                  <Skeleton className="h-6 w-6 sm:h-7 sm:w-7" />
+                  <Skeleton className="h-6 w-6 sm:h-7 sm:w-7" />
+                </CardFooter>
+              </Card>
+            ))}
+          </div>
+        )
       ) : filteredProducts.length === 0 ? (
         <div className="text-center py-12">
           <Package className="h-10 w-10 sm:h-12 sm:w-12 mx-auto text-muted-foreground mb-4" />
           <p className="text-muted-foreground text-sm">
             {searchTerm ? "No se encontraron productos" : "No hay productos registrados"}
           </p>
+        </div>
+      ) : viewMode === "table" ? (
+        <div className={cn("rounded-lg border bg-card shadow-sm m-0")}>
+          {/* Contenedor con altura fija */}
+          <div style={{ height: "65vh" }}>
+            <Table>
+              {/* HEADER */}
+              <TableHeader
+                className={cn("sticky top-0 z-10", "bg-muted backdrop-blur supports-[backdrop-filter]:bg-muted/95")}
+              >
+                <TableRow className={cn("border-b bg-muted hover:bg-muted")}>
+                  <TableHead className="font-semibold text-foreground bg-muted">Código</TableHead>
+                  <TableHead className="font-semibold min-w-[250px] text-foreground bg-muted">Descripción</TableHead>
+                  <TableHead className="font-semibold text-foreground bg-muted">Marca</TableHead>
+                  <TableHead className="font-semibold text-foreground bg-muted">Familia</TableHead>
+                  <TableHead className="font-semibold text-foreground bg-muted">Sucursal</TableHead>
+                  <TableHead className="font-semibold text-center text-foreground bg-muted">Cantidad</TableHead>
+                  <TableHead className="font-semibold text-center text-foreground bg-muted">Estado</TableHead>
+                  <TableHead className="font-semibold text-center text-foreground bg-muted">Precio Público</TableHead>
+                  <TableHead className="text-center font-semibold text-foreground bg-muted">Acciones</TableHead>
+                </TableRow>
+              </TableHeader>
+
+              {/* BODY */}
+              <TableBody>
+                {filteredProducts.map((product) => {
+                  const status = getStockStatus(product.cantidad, product.lowStockThreshold ?? 10)
+                  const branchName = product.branch?.name ?? "SinSucursal"
+                  const uniqueKey = `${product._id}_${branchName}_${product.codigo}`
+                  return (
+                    <TableRow key={uniqueKey} className="hover:bg-muted/30 transition-colors border-b last:border-b-0">
+                      <TableCell className=" text-sm font-medium">{product.codigo}</TableCell>
+
+                      <TableCell className="max-w-[300px]">
+                        <div className="flex items-center gap-3">
+                          <div className="h-12 w-12 rounded-md bg-muted flex items-center justify-center flex-shrink-0 overflow-hidden border">
+                            {"image_url" in product && product.image_url ? (
+                              <img
+                                src={product.image_url || "/placeholder.svg"}
+                                alt={product.descripcion}
+                                className="h-full w-full object-cover"
+                              />
+                            ) : (
+                              <Package className="h-5 w-5 text-muted-foreground" />
+                            )}
+                          </div>
+                          <span className="line-clamp-2 text-sm leading-tight">{product.descripcion}</span>
+                        </div>
+                      </TableCell>
+
+                      <TableCell>
+                        <Badge variant="secondary" className="font-medium">
+                          {product.marca}
+                        </Badge>
+                      </TableCell>
+
+                      <TableCell >
+                        <Badge variant="outline" className="font-normal whitespace-normal break-words text-wrap">
+                          {product.descripcionFamilia}
+                        </Badge>
+                      </TableCell>
+
+                      <TableCell>
+                        <div className="flex items-center gap-2">
+                          <div className="h-2 w-2 rounded-full bg-primary/60 flex-shrink-0" />
+                          <span className="text-sm">{product.branch?.name || "Sin definir"}</span>
+                        </div>
+                      </TableCell>
+
+                      <TableCell className="text-center">
+                        <span className="inline-flex items-center justify-center min-w-[3.5rem] px-3 py-1.5 rounded-full bg-primary/10 font-bold text-primary text-sm">
+                          {product.cantidad}
+                        </span>
+                      </TableCell>
+
+                      <TableCell className="text-center">
+                        <Badge variant={status.variant} className="min-w-[90px] justify-center font-medium">
+                          {status.label}
+                        </Badge>
+                      </TableCell>
+
+                      <TableCell className="text-center">
+                        <span className="font-semibold text-base">
+                          ${Number(product.precioPublicoConIVA).toFixed(2)}
+                        </span>
+                      </TableCell>
+
+                      <TableCell className="text-center">
+                        <div className="flex items-center justify-center gap-1">
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            onClick={() => handleViewDetails(product)}
+                            className="h-8 w-8 p-0 text-emerald-600 hover:bg-emerald-500/10 hover:text-emerald-700 transition-colors"
+                            title="Ver detalles"
+                          >
+                            <Eye className="h-4 w-4" />
+                          </Button>
+
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            onClick={() => handleOpenEditModal(product)}
+                            className="h-8 w-8 p-0 text-blue-600 hover:bg-blue-500/10 hover:text-blue-700 transition-colors"
+                            title="Editar"
+                          >
+                            <Pencil className="h-4 w-4" />
+                          </Button>
+
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            onClick={() => {
+                              setProductToDelete(product)
+                              setDeleteDialogOpen(true)
+                            }}
+                            className="h-8 w-8 p-0 text-red-600 hover:bg-red-500/10 hover:text-red-700 transition-colors"
+                            title="Eliminar"
+                          >
+                            <Trash2 className="h-4 w-4" />
+                          </Button>
+                        </div>
+                      </TableCell>
+                    </TableRow>
+                  )
+                })}
+              </TableBody>
+            </Table>
+          </div>
         </div>
       ) : (
         <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-5 gap-2 sm:gap-3">
@@ -682,7 +895,7 @@ export function InventoryView({
                         <p className="text-[8px] sm:text-[9px] text-muted-foreground mb-0.5">Distribuidor</p>
                         <p className="text-xs sm:text-sm font-bold text-primary">
                           {Number.isFinite(Number(product.precioDistribuidorConIVA)) &&
-                            String(product.precioDistribuidorConIVA) !== "*"
+                          String(product.precioDistribuidorConIVA) !== "*"
                             ? `$${Number(product.precioDistribuidorConIVA).toFixed(2)}`
                             : ""}
                         </p>
@@ -691,7 +904,7 @@ export function InventoryView({
                         <p className="text-[8px] sm:text-[9px] text-muted-foreground mb-0.5">Publico</p>
                         <p className="text-xs sm:text-sm font-bold text-primary">
                           {Number.isFinite(Number(product.precioPublicoConIVA)) &&
-                            String(product.precioPublicoConIVA) !== "*"
+                          String(product.precioPublicoConIVA) !== "*"
                             ? Number(product.precioPublicoConIVA).toFixed(2)
                             : product.precioPublicoConIVA}
                         </p>
@@ -700,7 +913,7 @@ export function InventoryView({
                         <p className="text-[8px] sm:text-[9px] text-muted-foreground mb-0.5">Mayoreo</p>
                         <p className="text-xs sm:text-sm font-bold text-primary">
                           {Number.isFinite(Number(product.precioMayoreoConIVA)) &&
-                            String(product.precioMayoreoConIVA) !== "*"
+                          String(product.precioMayoreoConIVA) !== "*"
                             ? Number(product.precioMayoreoConIVA).toFixed(2)
                             : product.precioMayoreoConIVA}
                         </p>
@@ -885,7 +1098,6 @@ export function InventoryView({
                     }}
                     onFocus={() => setShowSuggestions(true)}
                     onBlur={() => {
-                      // Delay para permitir click en sugerencias
                       setTimeout(() => setShowSuggestions(false), 200)
                     }}
                     placeholder="Ingresa el código"
@@ -893,7 +1105,6 @@ export function InventoryView({
                     autoComplete="off"
                   />
 
-                  {/* Indicador de búsqueda */}
                   {isSearching && (
                     <div className="absolute right-3 top-1/2 -translate-y-1/2">
                       <span className="h-4 w-4 border-2 border-t-transparent border-primary rounded-full animate-spin inline-block"></span>
@@ -901,7 +1112,6 @@ export function InventoryView({
                   )}
                 </div>
 
-                {/* Lista de sugerencias */}
                 {showSuggestions && searchResults.length > 0 && (
                   <div className="absolute top-full left-0 right-0 z-50 mt-1 bg-popover border rounded-md shadow-md max-h-[200px] overflow-y-auto">
                     {searchResults.map((product) => (
@@ -909,7 +1119,7 @@ export function InventoryView({
                         key={product._id}
                         type="button"
                         onMouseDown={(e) => {
-                          e.preventDefault() // Previene que se dispare el blur
+                          e.preventDefault()
                           seleccionarProducto(product)
                         }}
                         className="w-full px-3 py-2 text-left hover:bg-muted transition-colors flex items-start gap-2 border-b last:border-b-0"
@@ -917,15 +1127,9 @@ export function InventoryView({
                         <div className="flex-1 min-w-0">
                           <div className="flex items-center gap-2 mb-1">
                             <span className="font-medium text-sm">{product.codigo}</span>
-                            {product.ean && (
-                              <span className="text-xs text-muted-foreground">
-                                EAN: {product.ean}
-                              </span>
-                            )}
+                            {product.ean && <span className="text-xs text-muted-foreground">EAN: {product.ean}</span>}
                           </div>
-                          <p className="text-xs text-muted-foreground truncate">
-                            {product.descripcion}
-                          </p>
+                          <p className="text-xs text-muted-foreground truncate">{product.descripcion}</p>
                           <div className="flex gap-2 mt-1">
                             <Badge variant="secondary" className="text-[10px] px-1 py-0">
                               {product.marca}
@@ -936,12 +1140,10 @@ export function InventoryView({
                           </div>
                         </div>
                       </button>
-
                     ))}
                   </div>
                 )}
 
-                {/* Mensaje cuando no hay resultados */}
                 {showSuggestions && !isSearching && productCode.length >= 2 && searchResults.length === 0 && (
                   <div className="absolute top-full left-0 right-0 z-50 mt-1 bg-popover border rounded-md shadow-md p-3">
                     <p className="text-xs text-muted-foreground text-center">
@@ -1064,7 +1266,7 @@ export function InventoryView({
                 <div className="relative w-full aspect-video bg-muted rounded-md overflow-hidden flex items-center justify-center">
                   {imagePreview ? (
                     <img
-                      src={imagePreview}
+                      src={imagePreview || "/placeholder.svg"}
                       alt="Preview"
                       className="max-w-full max-h-full object-contain"
                     />

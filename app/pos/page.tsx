@@ -32,7 +32,7 @@ console.log("Usuario:", user)
 
 
   return (
-    <div className="flex min-h-screen flex-col bg-slate-50">
+    <div className="flex flex-col bg-slate-50">
       <header className="border-b bg-white shadow-sm">
         <div className="container mx-auto flex h-16 items-center justify-between px-4">
           <h1 className="text-xl font-semibold">Punto de Venta</h1>

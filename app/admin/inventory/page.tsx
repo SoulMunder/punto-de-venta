@@ -11,7 +11,7 @@ export default function InventoryPage() {
   const [deleteInventoryModalOpen, setDeleteInventoryModalOpen] = useState(false)
 
   return (
-    <div className="flex min-h-screen flex-col">
+    <div className="flex flex-col">
       {/* 🧭 Encabezado */}
       <header className="border-b bg-white">
         <div className="container mx-auto flex h-16 items-center justify-between px-4">
