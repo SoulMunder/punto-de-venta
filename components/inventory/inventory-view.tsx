@@ -155,6 +155,24 @@ export function InventoryView({
     return () => controller.abort()
   }, [productCode, manualModalOpen])
 
+  const getBranchColorByName = (branchName: string) => {
+    // Usamos el índice basado en el nombre de la sucursal
+    const branchIndex = branches.findIndex(b => b.name === branchName)
+    const colors = [
+      'bg-blue-500',
+      'bg-green-500',
+      'bg-purple-500',
+      'bg-orange-500',
+      'bg-pink-500',
+      'bg-cyan-500',
+      'bg-amber-500',
+      'bg-rose-500',
+      'bg-indigo-500',
+      'bg-teal-500'
+    ]
+    return colors[branchIndex % colors.length] || 'bg-primary/60'
+  }
+
   const seleccionarProducto = (product: Product) => {
     setProductCode(String(product.codigo))
     setShowSuggestions(false)
@@ -335,7 +353,7 @@ export function InventoryView({
       let data: any = {}
       try {
         data = await res.json()
-      } catch {}
+      } catch { }
 
       if (!res.ok) {
         throw new Error(data.error || "Error eliminando producto")
@@ -775,11 +793,10 @@ export function InventoryView({
 
                       <TableCell>
                         <div className="flex items-center gap-2">
-                          <div className="h-2 w-2 rounded-full bg-primary/60 flex-shrink-0" />
+                          <div className={`h-2 w-2 rounded-full flex-shrink-0 ${getBranchColorByName(product.branch?.name || "")}`} />
                           <span className="text-sm">{product.branch?.name || "Sin definir"}</span>
                         </div>
                       </TableCell>
-
                       <TableCell className="text-center">
                         <span className="inline-flex items-center justify-center min-w-[3.5rem] px-3 py-1.5 rounded-full bg-primary/10 font-bold text-primary text-sm">
                           {product.cantidad}
@@ -895,7 +912,7 @@ export function InventoryView({
                         <p className="text-[8px] sm:text-[9px] text-muted-foreground mb-0.5">Distribuidor</p>
                         <p className="text-xs sm:text-sm font-bold text-primary">
                           {Number.isFinite(Number(product.precioDistribuidorConIVA)) &&
-                          String(product.precioDistribuidorConIVA) !== "*"
+                            String(product.precioDistribuidorConIVA) !== "*"
                             ? `$${Number(product.precioDistribuidorConIVA).toFixed(2)}`
                             : ""}
                         </p>
@@ -904,7 +921,7 @@ export function InventoryView({
                         <p className="text-[8px] sm:text-[9px] text-muted-foreground mb-0.5">Publico</p>
                         <p className="text-xs sm:text-sm font-bold text-primary">
                           {Number.isFinite(Number(product.precioPublicoConIVA)) &&
-                          String(product.precioPublicoConIVA) !== "*"
+                            String(product.precioPublicoConIVA) !== "*"
                             ? Number(product.precioPublicoConIVA).toFixed(2)
                             : product.precioPublicoConIVA}
                         </p>
@@ -913,7 +930,7 @@ export function InventoryView({
                         <p className="text-[8px] sm:text-[9px] text-muted-foreground mb-0.5">Mayoreo</p>
                         <p className="text-xs sm:text-sm font-bold text-primary">
                           {Number.isFinite(Number(product.precioMayoreoConIVA)) &&
-                          String(product.precioMayoreoConIVA) !== "*"
+                            String(product.precioMayoreoConIVA) !== "*"
                             ? Number(product.precioMayoreoConIVA).toFixed(2)
                             : product.precioMayoreoConIVA}
                         </p>

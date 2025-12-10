@@ -14,7 +14,7 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@
 import { ProductDetailsModal } from "@/components/products/product-details-modal"
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar"
 import { openSaleReceiptPDFForPrint } from "@/lib/pdf-generator"
-import { getInventoryProducts } from "@/app/actions/inventoryProducts/get-inventory-products"
+import { searchInventoryProducts } from "@/app/actions/inventoryProducts/get-inventory-products"
 import { getCustomers } from "@/app/actions/customers/get-customers"
 import { processProductsSale } from "@/app/actions/sales/process-products-sale"
 import { getQuoteSales } from "@/app/actions/sales/get-quote-sales"
@@ -23,6 +23,8 @@ import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group"
 import { Skeleton } from "@/components/ui/skeleton"
 import { toast } from "sonner"
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs"
+import { getProductByEAN } from "@/app/actions/inventoryProducts/get-product-by-ean"
+
 
 // Definir tipos
 type SaleType = "remision" | "credito" | "cotizacion"
@@ -80,10 +82,16 @@ export function POSInterface({ branches, userId, userBranchId, allowBranchChange
   const [saleType, setSaleType] = useState<"remision" | "credito" | "cotizacion">("remision")
   const [advancedSearchOpen, setAdvancedSearchOpen] = useState(false)
   const [advancedSearchTerm, setAdvancedSearchTerm] = useState("")
+  const [advancedSearchResults, setAdvancedSearchResults] = useState<InventoryProduct[]>([])
+  const [advancedSearching, setAdvancedSearching] = useState(false)
+  const [isSearching, setIsSearching] = useState(false)
+  const [notFoundInAdvancedSearch, setNotFoundInAdvancedSearch] = useState(false)
 
   const [customerSearchValue, setCustomerSearchValue] = useState("Público en general")
   const [showCustomerDropdown, setShowCustomerDropdown] = useState(false)
   const customerInputRef = useRef<HTMLDivElement>(null)
+
+  const searchInputRef = useRef<HTMLInputElement>(null)
 
   const initialLoadDone = useRef(false)
   const { data: session } = useSession()
@@ -95,27 +103,29 @@ export function POSInterface({ branches, userId, userBranchId, allowBranchChange
       initialLoadDone.current = true
         ; (async () => {
           setIsInitialLoading(true)
-          await Promise.all([loadProducts(), loadCustomers()])
+          // Solo cargar clientes al inicio; los productos se cargan bajo demanda
+          await loadCustomers()
           setIsInitialLoading(false)
         })()
     }
   }, [])
 
-  useEffect(() => {
-    const urlParams = new URLSearchParams(window.location.search)
-    const convertQuoteId = urlParams.get("convertQuote")
-    if (!products.length || !convertQuoteId) return
-    if (convertQuoteId) {
-      loadQuoteForConversion(convertQuoteId)
-    }
-  }, [products])
+  // Los productos se cargan bajo demanda, no necesitamos estos efectos al inicio
+  // useEffect(() => {
+  //   const urlParams = new URLSearchParams(window.location.search)
+  //   const convertQuoteId = urlParams.get("convertQuote")
+  //   if (!products.length || !convertQuoteId) return
+  //   if (convertQuoteId) {
+  //     loadQuoteForConversion(convertQuoteId)
+  //   }
+  // }, [products])
 
-  useEffect(() => {
-    if (!products.length) return
-    loadAllCustomPrices()
-  }, [products])
+  // useEffect(() => {
+  //   if (!products.length) return
+  //   loadAllCustomPrices()
+  // }, [products])
 
-  const loadProducts = async () => {
+  {/*const loadProducts = async () => {
     try {
       const branchesNames = branches.map((branch) => branch.name)
       console.time("loadProducts")
@@ -126,11 +136,10 @@ export function POSInterface({ branches, userId, userBranchId, allowBranchChange
         return
       }
       setProducts(data)
-      console.log(data)
     } catch (error) {
       console.error(error)
     }
-  }
+  }*/}
 
   const loadCustomers = async () => {
     try {
@@ -369,7 +378,7 @@ export function POSInterface({ branches, userId, userBranchId, allowBranchChange
     setShowReceipt(false)
     setLastSaleId(null)
     setReceiptData(null)
-    loadProducts()
+    //loadProducts()
   }
 
   const handleViewDetails = (product: InventoryProduct) => {
@@ -442,59 +451,133 @@ export function POSInterface({ branches, userId, userBranchId, allowBranchChange
   const total = calculateTotal()
   const change = calculateChange()
 
+  const performAdvancedSearch = async () => {
+    const term = advancedSearchTerm.trim();
+    if (!term) {
+      toast.error("Ingresa un término de búsqueda");
+      return;
+    }
 
-  const advancedFilteredProducts = products.filter((product) => {
-    const term = advancedSearchTerm.trim()
-    const matchesSearch =
-      !term ||
-      product.descripcion?.toLowerCase().includes(term.toLowerCase()) ||
-      product.codigo?.toString().toLowerCase().includes(term.toLowerCase()) ||
-      product.ean?.toString().toLowerCase().includes(term.toLowerCase()) ||
-      product.barcode?.toLowerCase().includes(term.toLowerCase()) ||
-      product.clave?.toLowerCase().includes(term.toLowerCase())
-    const matchesBrand = brandFilter === "all" || product.marca === brandFilter
-    const matchesLine = familyDescriptionFilter === "all" || product.descripcionFamilia === familyDescriptionFilter
-    const selectedBranch = branches.find((branch) => branch.id === branchId)
-    const matchesBranch = product.branch === selectedBranch?.name
-    return matchesSearch && matchesBrand && matchesLine && matchesBranch
-  })
+    setAdvancedSearching(true);
+    setNotFoundInAdvancedSearch(false);
 
-  const handleQuickAdd = () => {
+    try {
+      const selectedBranchName = branches.find(b => b.id === branchId)?.name;
+      if (!selectedBranchName) {
+        toast.error("No se pudo determinar la sucursal seleccionada");
+        requestAnimationFrame(() => {
+          searchInputRef.current?.focus();
+        });
+        return;
+      }
+
+      // Llamada a la función que ya filtra por término en la base de datos
+      const { data, error } = await searchInventoryProducts(selectedBranchName, term);
+      console.log("Resultados de búsqueda avanzada:", data);
+
+      if (error) {
+        toast.error("Error al buscar productos");
+        return;
+      }
+
+      // Aplicar filtros adicionales en el frontend (marca y familia)
+      const filtered = data.filter((product: InventoryProduct) => {
+        const matchesBrand = brandFilter === "all" || product.marca === brandFilter;
+        const matchesLine = familyDescriptionFilter === "all" || product.descripcionFamilia === familyDescriptionFilter;
+        return matchesBrand && matchesLine;
+      });
+
+      setAdvancedSearchResults(filtered);
+
+      if (filtered.length === 0) {
+        setNotFoundInAdvancedSearch(true);
+        toast.error("No se encontraron productos con los criterios de búsqueda");
+      } else {
+        setNotFoundInAdvancedSearch(false);
+        toast.success(`${filtered.length} producto${filtered.length !== 1 ? 's' : ''} encontrado${filtered.length !== 1 ? 's' : ''}`);
+      }
+    } catch (err) {
+      console.error("Error en búsqueda avanzada:", err);
+      toast.error("Error en la búsqueda");
+    } finally {
+      setAdvancedSearching(false);
+    }
+  };
+
+  const handleQuickAdd = async () => {
     const q = searchTerm.trim()
-    if (!q) return
+    if (!q) {
+      toast.error("Ingresa el codigo de barras para buscar")
+      // 👇 ENFOCAR INMEDIATAMENTE
+      requestAnimationFrame(() => {
+        searchInputRef.current?.focus()
+      })
+      return
+    }
 
-    console.log("Sucursal actual:", branchId)
-
-    // 1️⃣ Obtener el nombre de la sucursal seleccionada
-    const selectedBranchName = branches.find(
-      (b) => b.id === branchId
-    )?.name
-
+    const selectedBranchName = branches.find(b => b.id === branchId)?.name
     if (!selectedBranchName) {
       toast.error("No se pudo determinar la sucursal seleccionada")
+      // 👇 ENFOCAR INMEDIATAMENTE
+      requestAnimationFrame(() => {
+        searchInputRef.current?.focus()
+      })
       return
     }
 
-    // 2️⃣ Filtrar productos que pertenecen a esa sucursal
-    const productsInBranch = products.filter(
-      (p) => p.branch === selectedBranchName
-    )
+    setIsSearching(true)
+    try {
+      const { data: product, error } = await getProductByEAN(q, selectedBranchName)
+      console.log("Producto obtenido por EAN:", product)
 
-    // 3️⃣ Buscar por EAN dentro de esa sucursal
-    const found = productsInBranch.find(
-      (p) => p.ean?.toString() === q
-    )
+      if (error || !product) {
+        toast.error(error || "No se encontró el producto")
+        setSearchTerm("")
+        setIsSearching(false) // 👈 IMPORTANTE: Cambiar estado ANTES de enfocar
 
-    if (!found) {
-      toast.error(`No se encontró un producto con ese código de barras en la sucursal: ${selectedBranchName}`)
-      return
+        // 👇 ENFOCAR DESPUÉS DE LIMPIAR TODO
+        requestAnimationFrame(() => {
+          searchInputRef.current?.focus()
+          searchInputRef.current?.select() // 👈 TAMBIÉN SELECCIONAR TODO EL TEXTO
+        })
+        return
+      }
+
+      addToCart(product, "retail")
+      setSearchTerm("")
+      setIsSearching(false) // 👈 IMPORTANTE: Cambiar estado ANTES de enfocar
+
+      // 👇 ENFOCAR DESPUÉS DE AGREGAR AL CARRITO
+      requestAnimationFrame(() => {
+        searchInputRef.current?.focus()
+        searchInputRef.current?.select() // 👈 SELECCIONAR TODO EL TEXTO
+      })
+
+    } catch (err) {
+      console.error("Error al buscar producto:", err)
+      toast.error("Error al buscar producto. Intenta de nuevo.")
+      setSearchTerm("")
+      setIsSearching(false) // 👈 IMPORTANTE: Cambiar estado ANTES de enfocar
+
+      // 👇 ENFOCAR DESPUÉS DEL ERROR
+      requestAnimationFrame(() => {
+        searchInputRef.current?.focus()
+        searchInputRef.current?.select()
+      })
     }
-
-    // 4️⃣ Agregar al carrito
-    addToCart(found, "retail")
-    setSearchTerm("")
+    // 👇 ELIMINAR el finally ya que manejamos isSearching arriba
   }
 
+
+
+  const handleAdvancedSearchClose = (open: boolean) => {
+    if (!open) {
+      setAdvancedSearchTerm("")
+      setAdvancedSearchResults([])
+      setAdvancedSearchOpen(false)
+      setNotFoundInAdvancedSearch(false)
+    }
+  }
 
   const clearCart = () => {
     setCart([])                  // Vacía los productos
@@ -638,12 +721,12 @@ export function POSInterface({ branches, userId, userBranchId, allowBranchChange
 
                 <TabsTrigger value="remision" className="flex items-center gap-2 text-sm">
                   <FileCheck className="w-4 h-4" />
-                  Remisión
+                  Nota de venta
                 </TabsTrigger>
 
                 <TabsTrigger value="credito" className="flex items-center gap-2 text-sm">
                   <CreditCard className="w-4 h-4" />
-                  Venta a Crédito
+                  Nota de Crédito
                 </TabsTrigger>
 
                 <TabsTrigger value="cotizacion" className="flex items-center gap-2 text-sm">
@@ -791,10 +874,13 @@ export function POSInterface({ branches, userId, userBranchId, allowBranchChange
                 <div className="relative">
                   <Search className="absolute left-3 top-1/2 h-3.5 w-3.5 sm:h-4 sm:w-4 -translate-y-1/2 text-muted-foreground" />
                   <Input
+                    ref={searchInputRef}
                     placeholder="Escanee o ingrese código de barras..."
                     value={searchTerm}
                     onChange={(e) => setSearchTerm(e.target.value)}
+                    disabled={isSearching}
                     className="pl-8 sm:pl-9 h-9 sm:h-10 text-xs sm:text-sm"
+                    autoFocus
                   />
                 </div>
               </div>
@@ -803,9 +889,19 @@ export function POSInterface({ branches, userId, userBranchId, allowBranchChange
                 <Button
                   type="submit"
                   className="h-9 sm:h-10 text-xs sm:text-sm bg-[var(--chart-2)] hover:bg-[var(--chart-2)] text-white"
+                  disabled={isSearching}
                 >
-                  <Plus className="h-4 w-4 mr-1" />
-                  Agregar
+                  {isSearching ? (
+                    <>
+                      <div className="h-3.5 w-3.5 sm:h-4 sm:w-4 mr-1 border-2 border-white border-t-transparent rounded-full animate-spin" />
+                      Buscando...
+                    </>
+                  ) : (
+                    <>
+                      <Plus className="h-4 w-4 mr-1" />
+                      Agregar
+                    </>
+                  )}
                 </Button>
 
 
@@ -1035,13 +1131,19 @@ export function POSInterface({ branches, userId, userBranchId, allowBranchChange
       />
 
       {/* Búsqueda avanzada Modal */}
-      <Dialog open={advancedSearchOpen} onOpenChange={setAdvancedSearchOpen}>
+      <Dialog open={advancedSearchOpen} onOpenChange={handleAdvancedSearchClose}>
         <DialogContent className="w-full max-w-6xl lg:max-w-7xl">
           <DialogHeader>
             <DialogTitle>Búsqueda avanzada</DialogTitle>
           </DialogHeader>
           <div className="space-y-4 p-4">
-            <div className="flex gap-2 items-center">
+            <form
+              className="flex gap-2 items-center"
+              onSubmit={(e) => {
+                e.preventDefault(); // evita que la página se recargue
+                performAdvancedSearch();
+              }}
+            >
               <div className="flex-1">
                 <Input
                   placeholder="Buscar por nombre, código o barras..."
@@ -1049,6 +1151,15 @@ export function POSInterface({ branches, userId, userBranchId, allowBranchChange
                   onChange={(e) => setAdvancedSearchTerm(e.target.value)}
                 />
               </div>
+
+              <Button
+                type="submit" // importante para que el form lo active
+                disabled={advancedSearching}
+                className="h-9"
+              >
+                {advancedSearching ? "Buscando..." : "Buscar"}
+              </Button>
+
               <div className="w-48">
                 <Select value={brandFilter} onValueChange={setBrandFilter}>
                   <SelectTrigger className="w-full h-9">
@@ -1064,6 +1175,7 @@ export function POSInterface({ branches, userId, userBranchId, allowBranchChange
                   </SelectContent>
                 </Select>
               </div>
+
               <div className="w-48">
                 <Select value={familyDescriptionFilter} onValueChange={setFamilyDescriptionFilter}>
                   <SelectTrigger className="w-full h-9">
@@ -1079,14 +1191,17 @@ export function POSInterface({ branches, userId, userBranchId, allowBranchChange
                   </SelectContent>
                 </Select>
               </div>
-            </div>
+            </form>
+
 
             <div className="max-h-[60vh] overflow-y-auto border rounded-md">
-              {advancedFilteredProducts.length === 0 ? (
-                <div className="p-6 text-center text-muted-foreground text-sm">No se encontraron productos</div>
+              {advancedSearchResults.length === 0 ? (
+                <div className="p-6 text-center text-muted-foreground text-sm">
+                  {advancedSearching ? "Buscando productos..." : "Presiona 'Buscar' para iniciar la búsqueda"}
+                </div>
               ) : (
                 <div className="divide-y">
-                  {advancedFilteredProducts.map((product) => {
+                  {advancedSearchResults.map((product) => {
                     const customPrices = productCustomPrices[product._id] || {}
                     const hasCustomPrices = Object.keys(customPrices).length > 0
                     return (

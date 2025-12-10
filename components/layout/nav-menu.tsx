@@ -32,8 +32,8 @@ export function NavMenu({ role, userName }: NavMenuProps) {
     { href: "/admin/products", label: "Productos", icon: Package },
     { href: "/admin/customers", label: "Clientes", icon: Users },
     { href: "/admin/inventory", label: "Inventario", icon: Building2 },
-    { href: "/admin/purchases", label: "Compras", icon: ShoppingBag },
-    { href: "/admin/sales", label: "Ventas", icon: Receipt },
+    { href: "/admin/purchases", label: "Historial de compras", icon: ShoppingBag },
+    { href: "/admin/sales", label: "Historial de ventas", icon: Receipt },
     { href: "/admin/users", label: "Usuarios", icon: UserCog },
     { href: "/pos", label: "Punto de Venta", icon: ShoppingCart },
   ]

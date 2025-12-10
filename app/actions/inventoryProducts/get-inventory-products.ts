@@ -3,40 +3,61 @@ import { connectToMainDatabase } from "@/lib/mongodb/connectToMainDatabase";
 import { connectToTrupperDatabase } from "@/lib/mongodb/connectToTrupperDatabase";
 import { InventoryProduct } from "@/lib/types";
 
-export async function getInventoryProducts(branchesNames: string[]): Promise<{ data: InventoryProduct[]; error: string | null }> {
+export async function searchInventoryProducts(
+  branchName: string,
+  term: string
+): Promise<{ data: InventoryProduct[]; error: string | null }> {
   try {
+    console.log("searchInventoryProducts called with:", { branchName, term });
+
     const mainDb = await connectToMainDatabase();
     const trupperDb = await connectToTrupperDatabase();
 
-    console.time("inventory")
-const inventoryProducts = await mainDb
-  .collection("inventory")
-  .find({ "branch.name": { $in: branchesNames } })
-  .toArray()
-console.timeEnd("inventory")
+    const searchRegex = new RegExp(term, "i"); // insensible a mayúsculas/minúsculas
 
-console.time("trupper")
-const codigos = inventoryProducts.map((p: any) => p.codigo)
+    console.time("trupper-search")
+    // Buscar en TrupperDB por campos relevantes
+    const trupperProducts = await trupperDb
+      .collection("products")
+      .find({
+        $or: [
+          { descripcion: { $regex: searchRegex } },
+          { codigo: Number(term) || -1 }, // si es número exacto
+          { ean: { $regex: searchRegex } },
+          { barcode: { $regex: searchRegex } },
+          { clave: { $regex: searchRegex } },
+        ],
+      })
+      .toArray();
+    console.timeEnd("trupper-search")
 
-const trupperProducts = await trupperDb
-  .collection("products")
-  .find({ codigo: { $in: codigos } })
-  .toArray()
-console.timeEnd("trupper")
+    if (trupperProducts.length === 0) return { data: [], error: null };
 
-console.time("merge")
-const trupperMap = new Map(trupperProducts.map(p => [p.codigo, p]));
-const mergedProducts = inventoryProducts.map((inv: any) => {
-  const trupper = trupperMap.get(inv.codigo);
-  return { ...inv, ...trupper, _id: inv._id };
-})
-console.timeEnd("merge")
+    const codigos = trupperProducts.map(p => p.codigo); // número
 
+    console.time("inventory-search")
+    // Buscar en MainDB solo productos de la sucursal con esos códigos
+    const inventoryProducts = await mainDb
+      .collection("inventory")
+      .find({
+        "branch.name": branchName,
+        codigo: { $in: codigos }
+      })
+      .toArray();
+    console.timeEnd("inventory-search")
 
-    // 5. Mapear al tipo final
+    // Mapear Trupper por código
+    const trupperMap = new Map(trupperProducts.map(p => [p.codigo, p]));
+
+    const mergedProducts = inventoryProducts.map((inv: any) => {
+      const trupper = trupperMap.get(inv.codigo);
+      return { ...inv, ...trupper, _id: inv._id };
+    });
+
+    // Mapear al tipo final, manteniendo codigo como number
     const mappedProducts: InventoryProduct[] = mergedProducts.map((product) => ({
       _id: product._id.toString(),
-      codigo: product.codigo.toString(),
+      codigo: product.codigo, // number
       clave: product.clave,
       descripcion: product.descripcion,
       margenDeMercado: product.margenDeMercado,
@@ -64,8 +85,6 @@ console.timeEnd("merge")
       volumenCm3: product.volumenCm3,
       image_url: product.image_url || null,
       customPrices: product.customPrices || null,
-      //Extras de producto
-      name: product.name || null,
       barcode: product.barcode || null,
       custom_prices: product.custom_prices || null,
       cantidad: product.cantidad || null,

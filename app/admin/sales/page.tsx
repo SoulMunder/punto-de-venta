@@ -20,7 +20,7 @@ export default async function SalesPage() {
   const { data: branches } = await getBranches()
 
   return (
-    <div className="flex min-h-screen flex-col">
+    <div className="flex flex-col">
       <header className="border-b bg-white">
         <div className="container mx-auto flex h-16 items-center justify-between px-4">
           <h1 className="text-xl font-semibold">Historial de Ventas</h1>
