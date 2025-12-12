@@ -7,7 +7,7 @@ import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
-import { Search, ShoppingCart, Trash2, FileText, Check, Barcode, Plus, Package, Notebook, FileCheck, CreditCard } from "lucide-react"
+import { Search, ShoppingCart, Trash2, FileText, Check, Barcode, Plus, Package, Notebook, FileCheck, CreditCard, Filter } from "lucide-react"
 import { Separator } from "@/components/ui/separator"
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog"
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
@@ -24,6 +24,8 @@ import { Skeleton } from "@/components/ui/skeleton"
 import { toast } from "sonner"
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { getProductByEAN } from "@/app/actions/inventoryProducts/get-product-by-ean"
+import { Clipboard } from "lucide-react"
+import { cn } from "@/lib/utils"
 
 
 // Definir tipos
@@ -109,6 +111,12 @@ export function POSInterface({ branches, userId, userBranchId, allowBranchChange
         })()
     }
   }, [])
+
+  useEffect(() => {
+    console.log("Advanced search results updated:", advancedSearchResults)
+
+  }, [advancedSearchResults])
+
 
   // Los productos se cargan bajo demanda, no necesitamos estos efectos al inicio
   // useEffect(() => {
@@ -487,6 +495,8 @@ export function POSInterface({ branches, userId, userBranchId, allowBranchChange
         return matchesBrand && matchesLine;
       });
 
+      console.log("Resultados después de aplicar filtros adicionales:", filtered);
+
       setAdvancedSearchResults(filtered);
 
       if (filtered.length === 0) {
@@ -711,44 +721,90 @@ export function POSInterface({ branches, userId, userBranchId, allowBranchChange
             </CardTitle>
           </CardHeader>
 
-          <CardContent>
-            <Label className="text-xs sm:text-sm mb-2">
-              Tipo de venta
-            </Label>
-            {/* TABS DE TIPO DE VENTA */}
-            <Tabs value={saleType} onValueChange={(v) => setSaleType(v as SaleType)}>
-              <TabsList className="grid w-full grid-cols-3">
+          <CardContent className="px-3 sm:px-6 pb-3 sm:pb-6">
+            {/* Tipo de venta */}
+            <div className="mb-3 sm:mb-4">
+              <Label className="text-xs sm:text-sm mb-2 block">
+                Tipo de venta
+              </Label>
 
-                <TabsTrigger value="remision" className="flex items-center gap-2 text-sm">
-                  <FileCheck className="w-4 h-4" />
-                  Nota de venta
-                </TabsTrigger>
+              {/* TABS - Versión compacta para móvil (sm) */}
+              <div className="sm:hidden">
+                <Tabs value={saleType} onValueChange={(v) => setSaleType(v as SaleType)}>
+                  <TabsList className="grid grid-cols-3 w-full h-auto min-h-[2.5rem] p-1 gap-1">
+                    <TabsTrigger
+                      value="remision"
+                      className="flex flex-col items-center justify-center py-2 px-1 text-xs h-auto min-h-[2.5rem]"
+                    >
+                      <FileCheck className="w-3.5 h-3.5 mb-0.5" />
+                      <span className="text-[10px] leading-tight">Nota de venta</span>
+                    </TabsTrigger>
 
-                <TabsTrigger value="credito" className="flex items-center gap-2 text-sm">
-                  <CreditCard className="w-4 h-4" />
-                  Nota de Crédito
-                </TabsTrigger>
+                    <TabsTrigger
+                      value="credito"
+                      className="flex flex-col items-center justify-center py-2 px-1 text-xs h-auto min-h-[2.5rem]"
+                    >
+                      <CreditCard className="w-3.5 h-3.5 mb-0.5" />
+                      <span className="text-[10px] leading-tight">Nota de crédito</span>
+                    </TabsTrigger>
 
-                <TabsTrigger value="cotizacion" className="flex items-center gap-2 text-sm">
-                  <FileText className="w-4 h-4" />
-                  Cotización
-                </TabsTrigger>
+                    <TabsTrigger
+                      value="cotizacion"
+                      className="flex flex-col items-center justify-center py-2 px-1 text-xs h-auto min-h-[2.5rem]"
+                    >
+                      <FileText className="w-3.5 h-3.5 mb-0.5" />
+                      <span className="text-[10px] leading-tight">Cotización</span>
+                    </TabsTrigger>
+                  </TabsList>
+                </Tabs>
+              </div>
 
-              </TabsList>
-            </Tabs>
+              {/* TABS - Versión original para sm y más grandes */}
+              <div className="hidden sm:block">
+                <Tabs value={saleType} onValueChange={(v) => setSaleType(v as SaleType)}>
+                  <TabsList className="grid w-full grid-cols-3">
+                    <TabsTrigger
+                      value="remision"
+                      className="flex items-center gap-2 text-sm"
+                    >
+                      <FileCheck className="w-4 h-4" />
+                      Nota de venta
+                    </TabsTrigger>
 
-            {/* DESCRIPCION */}
-            {saleType && (
-              <p className="mt-3 text-xs text-muted-foreground">
-                {SALE_TYPE_OPTIONS.find((opt) => opt.value === saleType)?.description}
-              </p>
-            )}
+                    <TabsTrigger
+                      value="credito"
+                      className="flex items-center gap-2 text-sm"
+                    >
+                      <CreditCard className="w-4 h-4" />
+                      Nota de Crédito
+                    </TabsTrigger>
+
+                    <TabsTrigger
+                      value="cotizacion"
+                      className="flex items-center gap-2 text-sm"
+                    >
+                      <FileText className="w-4 h-4" />
+                      Cotización
+                    </TabsTrigger>
+                  </TabsList>
+                </Tabs>
+              </div>
+
+              {/* DESCRIPCIÓN */}
+              {saleType && (
+                <p className="mt-2 sm:mt-3 text-[11px] sm:text-xs text-muted-foreground leading-tight sm:leading-normal">
+                  {SALE_TYPE_OPTIONS.find((opt) => opt.value === saleType)?.description}
+                </p>
+              )}
+            </div>
 
             {/* SELECTOR DE CLIENTE */}
-            <div className="space-y-2 mt-4">
+            <div className="space-y-2">
               <Label htmlFor="customer" className="text-xs sm:text-sm">
                 Cliente {saleType === "credito" && <span className="text-destructive">*</span>}
-                {saleType === "credito" ? " (obligatorio)" : " (opcional)"}
+                {saleType === "credito" && (
+                  <span className="text-xs text-muted-foreground ml-1">(requerido)</span>
+                )}
               </Label>
 
               <div className="relative" ref={customerInputRef}>
@@ -868,32 +924,32 @@ export function POSInterface({ branches, userId, userBranchId, allowBranchChange
                 e.preventDefault()
                 handleQuickAdd()
               }}
-              className="flex flex-col sm:flex-row gap-2 sm:gap-3"
+              className="flex flex-col md:flex-row gap-2 md:gap-3"
             >
               <div className="flex-1">
                 <div className="relative">
-                  <Search className="absolute left-3 top-1/2 h-3.5 w-3.5 sm:h-4 sm:w-4 -translate-y-1/2 text-muted-foreground" />
+                  <Search className="absolute left-3 top-1/2 h-3.5 w-3.5 md:h-4 md:w-4 -translate-y-1/2 text-muted-foreground" />
                   <Input
                     ref={searchInputRef}
                     placeholder="Escanee o ingrese código de barras..."
                     value={searchTerm}
                     onChange={(e) => setSearchTerm(e.target.value)}
                     disabled={isSearching}
-                    className="pl-8 sm:pl-9 h-9 sm:h-10 text-xs sm:text-sm"
+                    className="pl-8 md:pl-9 h-9 md:h-10 text-xs md:text-sm"
                     autoFocus
                   />
                 </div>
               </div>
 
-              <div className="flex items-center gap-2">
+              <div className="flex items-center gap-2 w-full md:w-auto">
                 <Button
                   type="submit"
-                  className="h-9 sm:h-10 text-xs sm:text-sm bg-[var(--chart-2)] hover:bg-[var(--chart-2)] text-white"
+                  className="h-9 md:h-10 text-xs md:text-sm bg-[var(--chart-2)] hover:bg-[var(--chart-2)] text-white flex-1 md:flex-initial"
                   disabled={isSearching}
                 >
                   {isSearching ? (
                     <>
-                      <div className="h-3.5 w-3.5 sm:h-4 sm:w-4 mr-1 border-2 border-white border-t-transparent rounded-full animate-spin" />
+                      <div className="h-3.5 w-3.5 md:h-4 md:w-4 mr-1 border-2 border-white border-t-transparent rounded-full animate-spin" />
                       Buscando...
                     </>
                   ) : (
@@ -904,98 +960,331 @@ export function POSInterface({ branches, userId, userBranchId, allowBranchChange
                   )}
                 </Button>
 
-
                 <Button
                   onClick={() => setAdvancedSearchOpen(true)}
                   type="button"
-                  className="h-9 sm:h-10 text-xs sm:text-sm bg-[var(--chart-2)] hover:bg-[var(--chart-2)] text-white"
+                  className="h-9 md:h-10 text-xs md:text-sm bg-[var(--chart-2)] hover:bg-[var(--chart-2)] text-white flex items-center gap-2 flex-1 md:flex-initial"
                 >
+                  <Filter className="h-4 w-4" />
                   Búsqueda avanzada
                 </Button>
-
               </div>
             </form>
 
-            {/* Moved Cart: formerly in the right column — now inside this card */}
-            <div className="space-y-3 sm:space-y-4">
-              <Card className="gap-0">
-                <CardHeader className="pl-6 gap-0">
-                  <CardTitle className="flex items-center gap-2 text-base sm:text-lg">
-                    <Package className="h-4 w-4 sm:h-5 sm:w-5" />
-                    Productos ({cart.length})
-                  </CardTitle>
-                </CardHeader>
-                <CardContent className="space-y-3 sm:space-y-4 p-3 sm:p-6">
-                  {cart.length === 0 ? (
-                    <div className="flex flex-col items-center justify-center py-6 sm:py-10 text-muted-foreground">
-                      <ShoppingCart className="h-10 w-10 sm:h-12 sm:w-12 opacity-40" />
-                      <p className="text-sm sm:text-base mt-3">Tu carrito está vacío</p>
-                    </div>
-                  ) : (
-                    <>
-                      <div className="space-y-2 max-h-48 sm:max-h-64 overflow-y-auto">
-                        {cart.map((item, index) => {
-                          const priceTypeLabel =
-                            item.price_type === "retail"
-                              ? "Público"
-                              : item.price_type === "wholesale"
-                                ? "Mayoreo"
-                                : "Personalizado"
-                          return (
-                            <div
-                              key={index}
-                              className="flex items-center gap-1.5 sm:gap-2 p-1.5 sm:p-2 border rounded text-xs sm:text-sm"
+            <div className="space-y-2">
+              {cart.length === 0 ? (
+                <div className="flex flex-col items-center justify-center py-6 sm:py-10 text-muted-foreground">
+                  <ShoppingCart className="h-10 w-10 sm:h-12 sm:w-12 opacity-40" />
+                  <p className="text-sm sm:text-base mt-3">Tu carrito está vacío</p>
+                </div>
+              ) : (
+                <>
+                  {/* Cards para móvil y tablet (hasta lg) */}
+                  <div className="lg:hidden space-y-2 max-h-64 overflow-y-auto">
+                    {cart.map((item, index) => {
+                      // Función para obtener el nombre del precio actual
+                      const getCurrentPriceName = (): string => {
+                        if (item.price_type === 'custom' && item.product.customPrices) {
+                          const customPrice = item.product.customPrices.find(
+                            (cp: any) => cp.price_value === item.unit_price
+                          );
+                          if (customPrice) {
+                            return customPrice.price_name.charAt(0).toUpperCase() + customPrice.price_name.slice(1);
+                          }
+                        }
+                        if (item.unit_price === item.product.precioPublicoConIVA) return 'Público con IVA';
+                        if (item.unit_price === item.product.precioMayoreoConIVA) return 'Mayoreo con IVA';
+                        if (item.unit_price === item.product.precioDistribuidorConIVA) return 'Distribuidor con IVA';
+                        if (item.unit_price === item.product.precioMedioMayoreoConIVA) return 'Medio Mayoreo con IVA';
+                        if (item.unit_price === item.product.precioPublicoSinIVA) return 'Público sin IVA';
+                        if (item.unit_price === item.product.precioMayoreoSinIVA) return 'Mayoreo sin IVA';
+                        if (item.unit_price === item.product.precioDistribuidorSinIVA) return 'Distribuidor sin IVA';
+                        if (item.unit_price === item.product.precioMedioMayoreoSinIVA) return 'Medio Mayoreo sin IVA';
+                        if (item.unit_price === item.product.precioMinimoDeVenta) return 'Precio Mínimo';
+                        return 'Personalizado';
+                      };
+
+                      // Construir opciones de precio para el select
+                      const priceOptions: { value: string; label: string; price: number }[] = [];
+
+                      // Precios con IVA
+                      if (item.product.precioPublicoConIVA)
+                        priceOptions.push({ value: 'publico_iva', label: 'Público con IVA', price: item.product.precioPublicoConIVA });
+                      if (item.product.precioMayoreoConIVA)
+                        priceOptions.push({ value: 'mayoreo_iva', label: 'Mayoreo con IVA', price: item.product.precioMayoreoConIVA });
+                      if (item.product.precioDistribuidorConIVA)
+                        priceOptions.push({ value: 'distribuidor_iva', label: 'Distribuidor con IVA', price: item.product.precioDistribuidorConIVA });
+                      if (item.product.precioMedioMayoreoConIVA)
+                        priceOptions.push({ value: 'medio_mayoreo_iva', label: 'Medio Mayoreo con IVA', price: item.product.precioMedioMayoreoConIVA });
+
+                      // Precios sin IVA
+                      if (item.product.precioPublicoSinIVA)
+                        priceOptions.push({ value: 'publico_sin_iva', label: 'Público sin IVA', price: item.product.precioPublicoSinIVA });
+                      if (item.product.precioMayoreoSinIVA)
+                        priceOptions.push({ value: 'mayoreo_sin_iva', label: 'Mayoreo sin IVA', price: item.product.precioMayoreoSinIVA });
+                      if (item.product.precioDistribuidorSinIVA)
+                        priceOptions.push({ value: 'distribuidor_sin_iva', label: 'Distribuidor sin IVA', price: item.product.precioDistribuidorSinIVA });
+                      if (item.product.precioMedioMayoreoSinIVA)
+                        priceOptions.push({ value: 'medio_mayoreo_sin_iva', label: 'Medio Mayoreo sin IVA', price: item.product.precioMedioMayoreoSinIVA });
+
+                      // Precio mínimo
+                      if (item.product.precioMinimoDeVenta)
+                        priceOptions.push({ value: 'precio_minimo', label: 'Precio mínimo', price: item.product.precioMinimoDeVenta });
+
+                      // Precios personalizados
+                      if (item.product.customPrices && item.product.customPrices.length > 0) {
+                        item.product.customPrices.forEach((cp: any) => {
+                          priceOptions.push({
+                            value: `custom_${cp.price_name}`,
+                            label: cp.price_name.charAt(0).toUpperCase() + cp.price_name.slice(1),
+                            price: cp.price_value
+                          });
+                        });
+                      }
+
+                      // Determinar valor actual del select
+                      const currentSelectValue =
+                        item.price_type === 'custom' && item.product.customPrices
+                          ? `custom_${item.product.customPrices.find((cp: any) => cp.price_value === item.unit_price)?.price_name || ''}`
+                          : item.price_type;
+
+                      return (
+                        <div key={index} className="border rounded-lg p-3 space-y-2 bg-white">
+                          <div className="flex items-start justify-between gap-2">
+                            <div className="flex-1 min-w-0">
+                              <p className="font-medium text-sm leading-tight">{item.product.descripcion}</p>
+                              <p className="text-xs text-muted-foreground mt-0.5">
+                                {item.product.unidad} • {getCurrentPriceName()}
+                              </p>
+                            </div>
+                            <Button
+                              variant="ghost"
+                              size="icon"
+                              className="h-7 w-7 flex-shrink-0"
+                              onClick={() => removeFromCart(index)}
                             >
-                              <div className="flex-1 min-w-0 flex flex-col sm:flex-row items-start sm:items-center gap-1 sm:gap-2">
-                                <div className="flex-1 min-w-0 w-full">
-                                  <p className="font-medium text-xs sm:text-sm truncate">{item.product.descripcion}</p>
-                                  <p className="text-[10px] sm:text-xs text-muted-foreground">
-                                    {item.product.unidad} • {priceTypeLabel}
-                                  </p>
-                                </div>
-                                <div className="flex items-center gap-1.5 sm:gap-2 w-full sm:w-auto">
+                              <Trash2 className="h-3.5 w-3.5 text-destructive" />
+                            </Button>
+                          </div>
+
+                          <div className="flex items-center justify-between pt-2 border-t">
+                            <div className="flex items-center gap-2">
+                              <span className="text-xs text-muted-foreground">Cantidad:</span>
+                              <Input
+                                type="number"
+                                min="1"
+                                value={item.quantity}
+                                onChange={(e) => updateQuantity(index, Number(e.target.value), saleType || 1)}
+                                className="w-14 h-7 text-xs"
+                              />
+                              <span className="text-xs text-muted-foreground">× ${item.unit_price.toFixed(2)}</span>
+                            </div>
+                            <div className="text-right">
+                              <p className="text-xs text-muted-foreground">Subtotal</p>
+                              <p className="font-bold text-sm">
+                                ${(item.unit_price * item.quantity).toFixed(2)}
+                              </p>
+                            </div>
+                          </div>
+
+                          {/* Select de precios para versión móvil */}
+                          <div className="pt-2">
+                            <Select
+                              value={currentSelectValue}
+                              onValueChange={(value) => {
+                                const updated = [...cart];
+                                const selectedPrice = priceOptions.find(p => p.value === value);
+                                if (selectedPrice) {
+                                  updated[index].unit_price = selectedPrice.price;
+                                  updated[index].price_type = value.startsWith('custom_') ? 'custom' : value;
+                                }
+                                setCart(updated);
+                              }}
+                            >
+                              <SelectTrigger className="w-full h-8 text-xs">
+                                <SelectValue>
+                                  <span className="truncate">{getCurrentPriceName()}</span>
+                                </SelectValue>
+                              </SelectTrigger>
+                              <SelectContent>
+                                {priceOptions.map((option) => (
+                                  <SelectItem key={option.value} value={option.value} className="text-xs">
+                                    <div className="flex justify-between items-center w-full">
+                                      <span className="truncate mr-2">{option.label}</span>
+                                      <span className="font-semibold whitespace-nowrap">${option.price.toFixed(2)}</span>
+                                    </div>
+                                  </SelectItem>
+                                ))}
+                              </SelectContent>
+                            </Select>
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </div>
+
+                  {/* Tabla solo para lg y más grandes */}
+                  <div className="hidden lg:block border rounded-lg overflow-hidden">
+                    <div className="max-h-64 overflow-y-auto">
+                      <Table>
+                        {/* HEADER */}
+                        <TableHeader
+                          className={cn("sticky top-0 z-10", "bg-muted backdrop-blur supports-[backdrop-filter]:bg-muted/95")}
+                        >
+                          <TableRow>
+                            <TableHead className="font-semibold text-foreground ">Producto</TableHead>
+                            <TableHead className="font-semibold text-foreground text-center">Cantidad</TableHead>
+                            <TableHead className="font-semibold text-foreground text-center">Precio Unit.</TableHead>
+                            <TableHead className="font-semibold text-foreground text-center">Subtotal</TableHead>
+                            <TableHead className="font-semibold text-foreground text-center">Acciones</TableHead>
+                          </TableRow>
+                        </TableHeader>
+                        <TableBody>
+                          {cart.map((item, index) => {
+                            // Función para obtener el nombre del precio actual
+                            const getCurrentPriceName = (): string => {
+                              if (item.price_type === 'custom' && item.product.customPrices) {
+                                const customPrice = item.product.customPrices.find(
+                                  (cp: any) => cp.price_value === item.unit_price
+                                );
+                                if (customPrice) {
+                                  return customPrice.price_name.charAt(0).toUpperCase() + customPrice.price_name.slice(1);
+                                }
+                              }
+                              if (item.unit_price === item.product.precioPublicoConIVA) return 'Público con IVA';
+                              if (item.unit_price === item.product.precioMayoreoConIVA) return 'Mayoreo con IVA';
+                              if (item.unit_price === item.product.precioDistribuidorConIVA) return 'Distribuidor con IVA';
+                              if (item.unit_price === item.product.precioMedioMayoreoConIVA) return 'Medio Mayoreo con IVA';
+                              if (item.unit_price === item.product.precioPublicoSinIVA) return 'Público sin IVA';
+                              if (item.unit_price === item.product.precioMayoreoSinIVA) return 'Mayoreo sin IVA';
+                              if (item.unit_price === item.product.precioDistribuidorSinIVA) return 'Distribuidor sin IVA';
+                              if (item.unit_price === item.product.precioMedioMayoreoSinIVA) return 'Medio Mayoreo sin IVA';
+                              if (item.unit_price === item.product.precioMinimoDeVenta) return 'Precio Mínimo';
+                              return 'Personalizado';
+                            };
+
+                            // Construir opciones de precio para el select
+                            const priceOptions: { value: string; label: string; price: number }[] = [];
+
+                            // Precios con IVA
+                            if (item.product.precioPublicoConIVA)
+                              priceOptions.push({ value: 'publico_iva', label: 'Público con IVA', price: item.product.precioPublicoConIVA });
+                            if (item.product.precioMayoreoConIVA)
+                              priceOptions.push({ value: 'mayoreo_iva', label: 'Mayoreo con IVA', price: item.product.precioMayoreoConIVA });
+                            if (item.product.precioDistribuidorConIVA)
+                              priceOptions.push({ value: 'distribuidor_iva', label: 'Distribuidor con IVA', price: item.product.precioDistribuidorConIVA });
+                            if (item.product.precioMedioMayoreoConIVA)
+                              priceOptions.push({ value: 'medio_mayoreo_iva', label: 'Medio Mayoreo con IVA', price: item.product.precioMedioMayoreoConIVA });
+
+                            // Precios sin IVA
+                            if (item.product.precioPublicoSinIVA)
+                              priceOptions.push({ value: 'publico_sin_iva', label: 'Público sin IVA', price: item.product.precioPublicoSinIVA });
+                            if (item.product.precioMayoreoSinIVA)
+                              priceOptions.push({ value: 'mayoreo_sin_iva', label: 'Mayoreo sin IVA', price: item.product.precioMayoreoSinIVA });
+                            if (item.product.precioDistribuidorSinIVA)
+                              priceOptions.push({ value: 'distribuidor_sin_iva', label: 'Distribuidor sin IVA', price: item.product.precioDistribuidorSinIVA });
+                            if (item.product.precioMedioMayoreoSinIVA)
+                              priceOptions.push({ value: 'medio_mayoreo_sin_iva', label: 'Medio Mayoreo sin IVA', price: item.product.precioMedioMayoreoSinIVA });
+
+                            // Precio mínimo
+                            if (item.product.precioMinimoDeVenta)
+                              priceOptions.push({ value: 'precio_minimo', label: 'Precio mínimo', price: item.product.precioMinimoDeVenta });
+
+                            // Precios personalizados
+                            if (item.product.customPrices && item.product.customPrices.length > 0) {
+                              item.product.customPrices.forEach((cp: any) => {
+                                priceOptions.push({
+                                  value: `custom_${cp.price_name}`,
+                                  label: cp.price_name.charAt(0).toUpperCase() + cp.price_name.slice(1),
+                                  price: cp.price_value
+                                });
+                              });
+                            }
+
+                            // Determinar valor actual del select
+                            const currentSelectValue =
+                              item.price_type === 'custom' && item.product.customPrices
+                                ? `custom_${item.product.customPrices.find((cp: any) => cp.price_value === item.unit_price)?.price_name || ''}`
+                                : item.price_type;
+
+                            return (
+                              <TableRow key={index} className="hover:bg-muted/30 transition-colors border-b last:border-b-0">
+                                <TableCell>
+                                  <div>
+                                    <p className="font-medium text-sm leading-tight">{item.product.descripcion}</p>
+                                    <p className="text-xs text-muted-foreground mt-0.5">{item.product.unidad}</p>
+                                  </div>
+                                </TableCell>
+                                <TableCell className="text-center">
                                   <Input
                                     type="number"
                                     min="1"
                                     value={item.quantity}
-                                    onChange={(e) =>
-                                      updateQuantity(index, Number.parseInt(e.target.value), saleType || 1)
-                                    }
-                                    className="w-12 sm:w-14 h-7 sm:h-8 text-xs"
+                                    onChange={(e) => updateQuantity(index, Number(e.target.value), saleType || 1)}
+                                    className="w-16 h-8 text-xs text-center mx-auto"
                                   />
-                                  <span className="text-xs whitespace-nowrap">× ${item.unit_price.toFixed(2)}</span>
-                                  <p className="font-semibold text-xs sm:text-sm whitespace-nowrap min-w-[50px] sm:min-w-[60px] text-right">
-                                    ${(item.unit_price * item.quantity).toFixed(2)}
-                                  </p>
-                                </div>
-                              </div>
-                              <Button
-                                variant="ghost"
-                                size="icon"
-                                className="h-7 w-7 sm:h-8 sm:w-8 flex-shrink-0"
-                                onClick={() => removeFromCart(index)}
-                              >
-                                <Trash2 className="h-3.5 w-3.5 sm:h-4 sm:w-4 text-destructive" />
-                              </Button>
-                            </div>
-                          )
-                        })}
-                      </div>
+                                </TableCell>
+                                <TableCell className="text-center font-medium">
+                                  ${item.unit_price.toFixed(2)}
+                                </TableCell>
+                                <TableCell className="text-center font-bold">
+                                  ${(item.unit_price * item.quantity).toFixed(2)}
+                                </TableCell>
 
-
-                    </>
-                  )}
-                </CardContent>
-              </Card>
+                                <TableCell>
+                                  <div className="flex items-center justify-center gap-2">
+                                    <Select
+                                      value={currentSelectValue}
+                                      onValueChange={(value) => {
+                                        const updated = [...cart];
+                                        const selectedPrice = priceOptions.find(p => p.value === value);
+                                        if (selectedPrice) {
+                                          updated[index].unit_price = selectedPrice.price;
+                                          updated[index].price_type = value.startsWith('custom_') ? 'custom' : value;
+                                        }
+                                        setCart(updated);
+                                      }}
+                                    >
+                                      <SelectTrigger className="h-8 text-xs min-w-[140px]">
+                                        <SelectValue>
+                                          <span className="truncate">{getCurrentPriceName()}</span>
+                                        </SelectValue>
+                                      </SelectTrigger>
+                                      <SelectContent>
+                                        {priceOptions.map((option) => (
+                                          <SelectItem key={option.value} value={option.value} className="text-xs">
+                                            <div className="flex justify-between items-center w-full">
+                                              <span className="truncate mr-2">{option.label}</span>
+                                              <span className="font-semibold whitespace-nowrap">${option.price.toFixed(2)}</span>
+                                            </div>
+                                          </SelectItem>
+                                        ))}
+                                      </SelectContent>
+                                    </Select>
+                                    <Button
+                                      variant="ghost"
+                                      size="icon"
+                                      onClick={() => removeFromCart(index)}
+                                      className="h-8 w-8 p-0 text-red-600 hover:bg-red-500/10 hover:text-red-700 transition-colors"
+                                      title="Eliminar"
+                                    >
+                                      <Trash2 className="h-4 w-4 text-destructive" />
+                                    </Button>
+                                  </div>
+                                </TableCell>
+                              </TableRow>
+                            );
+                          })}
+                        </TableBody>
+                      </Table>
+                    </div>
+                  </div>
+                </>
+              )}
             </div>
+
           </CardContent>
         </Card>
-
-
-
-
-
-
       </div>
 
 
@@ -1016,10 +1305,12 @@ export function POSInterface({ branches, userId, userBranchId, allowBranchChange
             <CardContent className="space-y-4 p-4 sm:p-6">
               {cart.length === 0 ? (
                 /* Carrito vacío */
-                <div className="flex flex-col items-center justify-center py-6 sm:py-10 text-muted-foreground">
-                  <ShoppingCart className="h-10 w-10 sm:h-12 sm:w-12 opacity-40" />
-                  <p className="text-sm sm:text-base mt-3">Tu carrito está vacío</p>
+                <div className="flex flex-col items-center justify-center py-4 sm:py-6 text-muted-foreground">
+                  <Clipboard className="h-8 w-8 sm:h-10 sm:w-10 opacity-40" />
+                  <p className="text-sm sm:text-base mt-2 text-center">Agrega productos para ver un resumen aquí</p>
+
                 </div>
+
               ) : (
                 <>
                   {/* TOTAL */}
@@ -1202,8 +1493,8 @@ export function POSInterface({ branches, userId, userBranchId, allowBranchChange
               ) : (
                 <div className="divide-y">
                   {advancedSearchResults.map((product) => {
-                    const customPrices = productCustomPrices[product._id] || {}
-                    const hasCustomPrices = Object.keys(customPrices).length > 0
+                    const hasCustomPrices = product.customPrices && product.customPrices.length > 0;
+
                     return (
                       <div
                         key={`${product._id}_adv`}
@@ -1211,12 +1502,15 @@ export function POSInterface({ branches, userId, userBranchId, allowBranchChange
                         onClick={() => handleViewDetails(product)}
                       >
                         <div className="flex flex-col sm:flex-row items-start gap-3 sm:gap-4">
+                          {/* Imagen / Avatar */}
                           <Avatar className="h-20 w-20 sm:h-24 sm:w-24 rounded-md mx-auto sm:mx-0">
                             <AvatarImage src={product.image_url || undefined} alt={product.descripcion} />
                             <AvatarFallback className="rounded-md text-base sm:text-lg">
                               {product.descripcion?.substring(0, 2).toUpperCase()}
                             </AvatarFallback>
                           </Avatar>
+
+                          {/* Información principal */}
                           <div className="flex-1 min-w-0 w-full">
                             <h3 className="font-semibold text-base sm:text-xl text-center sm:text-left">
                               {product.descripcion}
@@ -1237,8 +1531,11 @@ export function POSInterface({ branches, userId, userBranchId, allowBranchChange
                               )}
                             </div>
                           </div>
+
+                          {/* Precios */}
                           <div className="flex flex-col gap-2 w-full sm:w-auto" onClick={(e) => e.stopPropagation()}>
                             <div className="grid grid-cols-2 gap-2">
+                              {/* Precio público */}
                               <div
                                 className="border rounded-md p-2 sm:p-3 cursor-pointer hover:bg-slate-100 transition-colors min-w-[100px] sm:min-w-[110px]"
                                 onClick={() => addToCart(product, "retail")}
@@ -1250,6 +1547,8 @@ export function POSInterface({ branches, userId, userBranchId, allowBranchChange
                                   ${product.precioPublicoConIVA?.toFixed(2)}
                                 </div>
                               </div>
+
+                              {/* Precio mayoreo */}
                               <div
                                 className="border rounded-md p-2 sm:p-3 cursor-pointer hover:bg-slate-100 transition-colors min-w-[100px] sm:min-w-[110px]"
                                 onClick={() => addToCart(product, "wholesale")}
@@ -1262,6 +1561,8 @@ export function POSInterface({ branches, userId, userBranchId, allowBranchChange
                                 </div>
                               </div>
                             </div>
+
+                            {/* Botón personalizado */}
                             <Button
                               size="sm"
                               variant="secondary"
@@ -1271,12 +1572,24 @@ export function POSInterface({ branches, userId, userBranchId, allowBranchChange
                             >
                               Personalizado
                             </Button>
+
+                            {/* Opcional: mostrar lista de precios personalizados debajo del botón */}
+                            {hasCustomPrices && (
+                              <div className="mt-1 space-y-1">
+                                {product.customPrices?.map((cp) => (
+                                  <div key={cp.price_name} className="text-xs text-muted-foreground">
+                                    {cp.price_name}: ${cp.price_value.toFixed(2)}
+                                  </div>
+                                ))}
+                              </div>
+                            )}
                           </div>
                         </div>
                       </div>
                     )
                   })}
                 </div>
+
               )}
             </div>
           </div>
@@ -1293,26 +1606,33 @@ export function POSInterface({ branches, userId, userBranchId, allowBranchChange
               <p className="text-sm text-muted-foreground">
                 Producto: <span className="font-medium">{selectedProductForCustomPrice.descripcion}</span>
               </p>
+
               <div className="space-y-2">
-                {Object.entries(productCustomPrices[selectedProductForCustomPrice._id] || {}).map(([name, price]) => (
+                {selectedProductForCustomPrice.customPrices?.map((cp) => (
                   <Button
-                    key={name}
+                    key={cp.price_name}
                     variant="outline"
                     className="w-full justify-between bg-transparent"
                     onClick={() => {
-                      addToCart(selectedProductForCustomPrice, "custom", Number(price))
-                      setCustomPriceDialogOpen(false)
-                      setSelectedProductForCustomPrice(null)
+                      addToCart(selectedProductForCustomPrice, "custom", Number(cp.price_value));
+                      setCustomPriceDialogOpen(false);
+                      setSelectedProductForCustomPrice(null);
                     }}
                   >
-                    <span>{name}</span>
-                    <span className="font-semibold">${Number(price).toFixed(2)}</span>
+                    <span>{cp.price_name}</span>
+                    <span className="font-semibold">${Number(cp.price_value).toFixed(2)}</span>
                   </Button>
                 ))}
+
+                {/* Si no hay precios personalizados */}
+                {(!selectedProductForCustomPrice.customPrices || selectedProductForCustomPrice.customPrices.length === 0) && (
+                  <p className="text-sm text-muted-foreground text-center">No hay precios personalizados disponibles</p>
+                )}
               </div>
             </div>
           </DialogContent>
         </Dialog>
+
       )}
 
       {/* Receipt Modal */}

@@ -87,9 +87,9 @@ export function UserManagement({ branches }: UserManagementProps) {
     setIsDeleting(true)
     try {
       const result = await deleteUser(userToDelete.id)
-      if (result.error){
-          alert(result.error)
-          return
+      if (result.error) {
+        alert(result.error)
+        return
       }
       await loadUsers()
       setDeleteDialogOpen(false)
@@ -104,17 +104,19 @@ export function UserManagement({ branches }: UserManagementProps) {
 
   return (
     <div className="space-y-4">
-      <div className="flex items-center justify-end">
+      <div className="flex items-center justify-start">
         <Button
           onClick={() => {
             setEditingUser(null)
             setDialogOpen(true)
           }}
+          className="w-full sm:w-auto"
         >
           <Plus className="mr-2 h-4 w-4" />
           Nuevo Usuario
         </Button>
       </div>
+
 
       {isLoading ? (
         <div className="text-center py-8 text-muted-foreground">Cargando usuarios...</div>

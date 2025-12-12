@@ -122,3 +122,12 @@
     @apply bg-background text-foreground;
   }
 }
+
+/* Oculta scroll horizontal pero mantiene el desplazamiento */
+.hide-scrollbar {
+  scrollbar-width: none; /* Firefox */
+}
+
+.hide-scrollbar::-webkit-scrollbar {
+  display: none; /* Chrome, Edge, Safari */
+}

@@ -540,57 +540,63 @@ export function InventoryView({
 
   return (
     <div className="space-y-4 sm:space-y-6 p-2 sm:p-4">
-      <div className="flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-3 sm:gap-4">
-        <div className="flex items-center gap-2 max-w-full sm:max-w-md">
-          <div className="flex items-center gap-2 flex-1">
-            <div className="relative flex-1">
-              <Search className="absolute left-3 top-1/2 h-3.5 w-3.5 sm:h-4 sm:w-4 -translate-y-1/2 text-muted-foreground" />
-              <Input
-                placeholder="Buscar productos..."
-                value={searchTerm}
-                onChange={(e) => setSearchTerm(e.target.value)}
-                className="pl-8 sm:pl-9 h-9 sm:h-10 text-xs sm:text-sm w-[25vw]"
-              />
-            </div>
+      <div className="flex flex-col sm:flex-row justify-between gap-4">
 
-            <Select value={selectedBranch} onValueChange={setSelectedBranch}>
-              <SelectTrigger className="w-full sm:w-[200px]">
-                <SelectValue placeholder="Todas las sucursales" />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="all">Todas las sucursales</SelectItem>
-                {branches.map((branch) => (
-                  <SelectItem key={branch.name} value={branch.name}>
-                    {branch.name}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
+        {/* Fila 1: Buscador */}
+        <div className="flex items-center w-full">
+          <div className="relative flex-1">
+            <Search className="absolute left-3 top-1/2 h-3.5 w-3.5 sm:h-4 sm:w-4 -translate-y-1/2 text-muted-foreground" />
+            <Input
+              placeholder="Buscar productos..."
+              value={searchTerm}
+              onChange={(e) => setSearchTerm(e.target.value)}
+              className="pl-8 sm:pl-9 h-9 sm:h-10 text-xs sm:text-sm w-full"
+            />
           </div>
         </div>
 
-        <div className="flex items-center justify-end">
-          <Button
-            variant={viewMode === "grid" ? "default" : "outline"}
-            size="sm"
-            onClick={() => setViewMode("grid")}
-            className="h-9 w-9 p-0"
-            aria-label="Vista en tarjetas"
-          >
-            <LayoutGrid className="h-4 w-4" />
-          </Button>
+        {/* Fila 2: Sucursal + Botones de vista (misma fila en responsive) */}
+        <div className="flex items-center justify-between sm:justify-end w-full gap-3">
 
-          <Button
-            variant={viewMode === "table" ? "default" : "outline"}
-            size="sm"
-            onClick={() => setViewMode("table")}
-            className="ml-2 h-9 w-9 p-0"
-            aria-label="Vista en tabla"
-          >
-            <List className="h-4 w-4" />
-          </Button>
+          <Select value={selectedBranch} onValueChange={setSelectedBranch}>
+            <SelectTrigger className="w-full sm:w-[200px]">
+              <SelectValue placeholder="Todas las sucursales" />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="all">Todas las sucursales</SelectItem>
+              {branches.map((branch) => (
+                <SelectItem key={branch.name} value={branch.name}>
+                  {branch.name}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+
+          <div className="flex items-center gap-2">
+            <Button
+              variant={viewMode === "grid" ? "default" : "outline"}
+              size="sm"
+              onClick={() => setViewMode("grid")}
+              className="h-9 w-9 p-0"
+              aria-label="Vista en tarjetas"
+            >
+              <LayoutGrid className="h-4 w-4" />
+            </Button>
+
+            <Button
+              variant={viewMode === "table" ? "default" : "outline"}
+              size="sm"
+              onClick={() => setViewMode("table")}
+              className="h-9 w-9 p-0"
+              aria-label="Vista en tabla"
+            >
+              <List className="h-4 w-4" />
+            </Button>
+          </div>
+
         </div>
       </div>
+
 
       {loading ? (
         viewMode === "table" ? (

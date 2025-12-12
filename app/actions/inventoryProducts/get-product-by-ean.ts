@@ -39,7 +39,11 @@ export async function getProductByEAN(
 
     console.time("merge")
     // Merge de datos, usando any para evitar errores de tipo
-    const merged: any = { ...inventoryProduct, ...trupperProduct, _id: inventoryProduct._id };
+    const merged: any = {
+      ...trupperProduct,
+      ...inventoryProduct, // sobrescribe los campos de trupperProduct
+      _id: inventoryProduct._id,
+    };
     console.timeEnd("merge")
 
     // Mapear igual que getInventoryProducts
@@ -76,7 +80,6 @@ export async function getProductByEAN(
       // Extras de producto
       name: merged.name || null,
       barcode: merged.barcode || null,
-      custom_prices: merged.custom_prices || null,
       cantidad: merged.cantidad || null,
       branch: merged.branch?.name || null,
     } as any; // <---- aquí usamos as any para replicar exactamente el otro comportamiento

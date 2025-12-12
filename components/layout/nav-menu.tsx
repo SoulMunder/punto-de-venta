@@ -3,11 +3,12 @@
 import Link from "next/link"
 import { usePathname, useRouter } from "next/navigation"
 import { cn } from "@/lib/utils"
-import { Package, Users, Building2, ShoppingBag, ShoppingCart, UserCog, Receipt, LogOut } from "lucide-react"
+import { Package, Users, Building2, ShoppingBag, ShoppingCart, UserCog, Receipt, LogOut, Menu, X } from "lucide-react"
 import { signOut } from "next-auth/react"
 import { Button } from "@/components/ui/button"
 import Image from "next/image"
 import { AllowedRole } from "@/lib/types"
+import { useState, useEffect } from "react"
 
 interface NavMenuProps {
   role: AllowedRole
@@ -17,6 +18,24 @@ interface NavMenuProps {
 export function NavMenu({ role, userName }: NavMenuProps) {
   const pathname = usePathname()
   const router = useRouter()
+  const [isMenuOpen, setIsMenuOpen] = useState(false)
+
+  // Cerrar menú al cambiar de ruta
+  useEffect(() => {
+    setIsMenuOpen(false)
+  }, [pathname])
+
+  // Prevenir scroll cuando el menú está abierto
+  useEffect(() => {
+    if (isMenuOpen) {
+      document.body.style.overflow = 'hidden'
+    } else {
+      document.body.style.overflow = 'unset'
+    }
+    return () => {
+      document.body.style.overflow = 'unset'
+    }
+  }, [isMenuOpen])
 
   const handleLogout = async () => {
     try {
@@ -29,7 +48,7 @@ export function NavMenu({ role, userName }: NavMenuProps) {
   }
 
   const adminLinks = [
-    { href: "/admin/products", label: "Productos", icon: Package },
+    { href: "/admin/products", label: "Catálogo Trupper", icon: Package },
     { href: "/admin/customers", label: "Clientes", icon: Users },
     { href: "/admin/inventory", label: "Inventario", icon: Building2 },
     { href: "/admin/purchases", label: "Historial de compras", icon: ShoppingBag },
@@ -52,22 +71,129 @@ export function NavMenu({ role, userName }: NavMenuProps) {
   else if (role === "branch_manager") links = branchManagerLinks
 
   return (
-    <nav className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-2 sm:gap-1 p-2 sm:p-2 bg-white border-b">
-      <div className="flex flex-col sm:flex-row items-start sm:items-center gap-2 sm:gap-4 w-full sm:w-auto">
-        <div className="flex items-center justify-between w-full sm:w-auto gap-2 px-2">
+    <>
+     {/* Header principal */}
+      <nav className="bg-white border-b sticky top-0 z-40">
+        <div className="flex items-center justify-between p-3 md:p-4">
+          {/* Botón menú móvil */}
+          <div className="flex items-center lg:hidden">
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => setIsMenuOpen(!isMenuOpen)}
+              className="h-9 w-9 p-0"
+              title="Menú"
+            >
+              <Menu className="h-5 w-5" />
+            </Button>
+          </div>
+
+          {/* Logo centrado en móvil/tablet, a la izquierda en desktop */}
+          <div className="absolute left-1/2 -translate-x-1/2 lg:static lg:translate-x-0 flex items-center gap-2 md:gap-3">
+            <Image
+              src="/images/masicsa-logo.png"
+              alt="MASICSA Logo"
+              width={40}
+              height={40}
+              className="w-8 h-8 md:w-10 md:h-10 object-contain"
+            />
+            <span className="text-lg md:text-xl font-bold text-primary">MASICSA</span>
+          </div>
+
+          {/* Links desktop */}
+          <div className="hidden lg:flex lg:flex-1 lg:flex-wrap lg:items-center lg:justify-center gap-2">
+            {links.map((link) => {
+              const Icon = link.icon
+              const isActive = pathname === link.href
+              return (
+                <Link
+                  key={link.href}
+                  href={link.href}
+                  className={cn(
+                    "flex items-center gap-2 px-4 py-2 rounded-md text-sm font-medium transition-colors whitespace-nowrap",
+                    isActive 
+                      ? "bg-primary text-primary-foreground" 
+                      : "text-slate-700 hover:bg-accent hover:text-accent-foreground",
+                  )}
+                >
+                  <Icon className="h-4 w-4" />
+                  <span>{link.label}</span>
+                </Link>
+              )
+            })}
+          </div>
+
+          {/* Usuario y logout desktop */}
+          <div className="flex items-center gap-2 md:gap-3 lg:ml-auto">
+            {userName && (
+              <span className="hidden sm:inline text-sm text-slate-600 max-w-[120px] md:max-w-[200px] truncate">
+                {userName}
+              </span>
+            )}
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={handleLogout}
+              className="flex items-center gap-2 h-9"
+              title="Cerrar Sesión"
+            >
+              <LogOut className="h-4 w-4" />
+              <span className="hidden md:inline">Salir</span>
+            </Button>
+          </div>
+        </div>
+      </nav>
+
+      {/* Overlay */}
+      {isMenuOpen && (
+        <div 
+          className="fixed inset-0 bg-black/50 z-50 lg:hidden transition-opacity"
+          onClick={() => setIsMenuOpen(false)}
+        />
+      )}
+
+      {/* Sidebar lateral */}
+      <aside
+        className={cn(
+          "fixed top-0 left-0 h-full w-[280px] bg-white border-r shadow-lg z-50 lg:hidden transition-transform duration-300 ease-in-out",
+          isMenuOpen ? "translate-x-0" : "-translate-x-full"
+        )}
+      >
+        {/* Header del sidebar */}
+        <div className="flex items-center justify-between p-4 border-b">
           <div className="flex items-center gap-2">
             <Image
               src="/images/masicsa-logo.png"
               alt="MASICSA Logo"
               width={32}
               height={32}
-              className="object-contain sm:w-10 sm:h-10"
+              className="w-8 h-8 object-contain"
             />
-            <span className="text-base sm:text-lg font-bold text-primary">MASICSA</span>
+            <span className="text-lg font-bold text-primary">MASICSA</span>
           </div>
+          <Button
+            variant="ghost"
+            size="sm"
+            onClick={() => setIsMenuOpen(false)}
+            className="h-8 w-8 p-0"
+          >
+            <X className="h-5 w-5" />
+          </Button>
         </div>
-        <div className="hidden sm:block h-8 w-px bg-border" />
-        <div className="flex flex-wrap gap-1 w-full sm:w-auto">
+
+        {/* Usuario info */}
+        {userName && (
+          <div className="p-4 bg-slate-50 border-b">
+            <p className="text-sm font-medium text-slate-900">{userName}</p>
+            <p className="text-xs text-slate-500 capitalize">{role.replace('_', ' ')}</p>
+          </div>
+        )}
+
+        {/* Links del menú */}
+        <nav 
+          className="flex flex-col p-3 space-y-1 overflow-y-auto" 
+          style={{ height: userName ? 'calc(100vh - 220px)' : 'calc(100vh - 160px)' }}
+        >
           {links.map((link) => {
             const Icon = link.icon
             const isActive = pathname === link.href
@@ -76,32 +202,33 @@ export function NavMenu({ role, userName }: NavMenuProps) {
                 key={link.href}
                 href={link.href}
                 className={cn(
-                  "flex items-center gap-2 px-3 sm:px-4 py-1.5 sm:py-2 rounded-md text-xs sm:text-sm font-medium transition-colors whitespace-nowrap",
-                  isActive ? "bg-primary text-primary-foreground" : "text-slate-700 hover:bg-accent",
+                  "flex items-center gap-3 px-4 py-3 rounded-lg text-sm font-medium transition-colors",
+                  isActive 
+                    ? "bg-primary text-primary-foreground shadow-sm" 
+                    : "text-slate-700 hover:bg-slate-100",
                 )}
               >
-                <Icon className="h-3.5 w-3.5 sm:h-4 sm:w-4" />
-                <span className="hidden sm:inline">{link.label}</span>
+                <Icon className="h-5 w-5 flex-shrink-0" />
+                <span>{link.label}</span>
               </Link>
             )
           })}
-        </div>
-      </div>
+        </nav>
 
-      <div className="flex items-center gap-2 sm:gap-3 w-full sm:w-auto justify-end px-2 sm:px-0">
-        {userName && (
-          <span className="text-xs sm:text-sm text-slate-600 truncate max-w-[150px] sm:max-w-none">{userName}</span>
-        )}
-        <Button
-          variant="outline"
-          size="sm"
-          onClick={handleLogout}
-          className="flex items-center justify-center bg-transparent h-7 sm:h-9 w-7 sm:w-9 p-0"
-          title="Cerrar Sesión"
-        >
-          <LogOut className="h-3 w-3 sm:h-4 sm:w-4" />
-        </Button>
-      </div>
-    </nav>
+        {/* Botón logout en sidebar */}
+        <div className="absolute bottom-0 left-0 right-0 p-3 border-t bg-white">
+          <button
+            onClick={() => {
+              setIsMenuOpen(false)
+              handleLogout()
+            }}
+            className="flex items-center gap-3 w-full px-4 py-3 rounded-lg text-sm font-medium text-red-600 hover:bg-red-50 transition-colors"
+          >
+            <LogOut className="h-5 w-5" />
+            <span>Cerrar Sesión</span>
+          </button>
+        </div>
+      </aside>
+    </>
   )
 }

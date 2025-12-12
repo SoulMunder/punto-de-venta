@@ -80,40 +80,85 @@ export function PurchaseList() {
 
   return (
     <div className="space-y-4 sm:space-y-6 p-2 sm:p-4">
-      <div className="flex items-center justify-between gap-2">
-        <div className="flex items-center gap-2">
-          <Button onClick={() => setDialogOpen(true)}>
-            <Plus className="mr-2 h-4 w-4" />
-            Nueva Compra
-          </Button>
-          <Link href="/admin/purchases/cargar-compras" passHref>
-            <Button>
-              <ShoppingCart className="mr-2 h-4 w-4" />
-              Cargar nuevas compras
-            </Button>
-          </Link>
-        </div>
-        <div className="flex items-center">
-          <Button
-            variant={viewMode === 'grid' ? 'default' : 'outline'}
-            size="sm"
-            onClick={() => setViewMode('grid')}
-            className="h-9 w-9 p-0"
-            aria-label="Vista en tarjetas"
-          >
-            <LayoutGrid className="h-4 w-4" />
-          </Button>
-          <Button
-            variant={viewMode === 'table' ? 'default' : 'outline'}
-            size="sm"
-            onClick={() => setViewMode('table')}
-            className="ml-2 h-9 w-9 p-0"
-            aria-label="Vista en tabla"
-          >
-            <List className="h-4 w-4" />
-          </Button>
-        </div>
-      </div>
+     <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 sm:gap-2">
+
+  {/* --- MOBILE: cargar nuevas compras arriba (full width) --- */}
+  <div className="flex sm:hidden">
+    <Link href="/admin/purchases/cargar-compras" passHref className="w-full">
+      <Button className="w-full">
+        <ShoppingCart className="mr-2 h-4 w-4" />
+        Cargar nuevas compras
+      </Button>
+    </Link>
+  </div>
+
+  {/* --- MOBILE: nueva compra + vistas abajo --- */}
+  <div className="flex sm:hidden items-center justify-between gap-2">
+    <Button onClick={() => setDialogOpen(true)} className="flex-1">
+      <Plus className="mr-2 h-4 w-4" />
+      Nueva Compra
+    </Button>
+
+    <div className="flex items-center">
+      <Button
+        variant={viewMode === "grid" ? "default" : "outline"}
+        size="sm"
+        onClick={() => setViewMode("grid")}
+        className="h-9 w-9 p-0"
+        aria-label="Vista en tarjetas"
+      >
+        <LayoutGrid className="h-4 w-4" />
+      </Button>
+      <Button
+        variant={viewMode === "table" ? "default" : "outline"}
+        size="sm"
+        onClick={() => setViewMode("table")}
+        className="ml-2 h-9 w-9 p-0"
+        aria-label="Vista en tabla"
+      >
+        <List className="h-4 w-4" />
+      </Button>
+    </div>
+  </div>
+
+  {/* --- DESKTOP / TABLET: vista original --- */}
+  <div className="hidden sm:flex items-center gap-2">
+    <Button onClick={() => setDialogOpen(true)}>
+      <Plus className="mr-2 h-4 w-4" />
+      Nueva Compra
+    </Button>
+
+    <Link href="/admin/purchases/cargar-compras" passHref>
+      <Button>
+        <ShoppingCart className="mr-2 h-4 w-4" />
+        Cargar nuevas compras
+      </Button>
+    </Link>
+  </div>
+
+  <div className="hidden sm:flex items-center">
+    <Button
+      variant={viewMode === "grid" ? "default" : "outline"}
+      size="sm"
+      onClick={() => setViewMode("grid")}
+      className="h-9 w-9 p-0"
+      aria-label="Vista en tarjetas"
+    >
+      <LayoutGrid className="h-4 w-4" />
+    </Button>
+    <Button
+      variant={viewMode === "table" ? "default" : "outline"}
+      size="sm"
+      onClick={() => setViewMode("table")}
+      className="ml-2 h-9 w-9 p-0"
+      aria-label="Vista en tabla"
+    >
+      <List className="h-4 w-4" />
+    </Button>
+  </div>
+
+</div>
+
 
       {isLoading ? (
         viewMode === 'table' ? (

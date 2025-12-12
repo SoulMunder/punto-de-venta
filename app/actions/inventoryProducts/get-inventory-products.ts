@@ -49,10 +49,16 @@ export async function searchInventoryProducts(
     // Mapear Trupper por código
     const trupperMap = new Map(trupperProducts.map(p => [p.codigo, p]));
 
-    const mergedProducts = inventoryProducts.map((inv: any) => {
-      const trupper = trupperMap.get(inv.codigo);
-      return { ...inv, ...trupper, _id: inv._id };
-    });
+const mergedProducts = inventoryProducts.map((inv: any) => {
+  const trupper = trupperMap.get(inv.codigo);
+  return {
+    ...trupper,           // primero los datos generales
+    ...inv,               // luego los datos de inventario sobrescriben
+    customPrices: inv.customPrices || trupper?.customPrices || null,
+    _id: inv._id,
+  };
+});
+
 
     // Mapear al tipo final, manteniendo codigo como number
     const mappedProducts: InventoryProduct[] = mergedProducts.map((product) => ({

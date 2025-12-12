@@ -189,30 +189,41 @@ export function SalesList({ branches, userRole }: SalesListProps) {
 
   return (
     <div className="space-y-4 sm:space-y-6 p-2 sm:p-4">
-      <div className="flex flex-col sm:flex-row items-start sm:items-center gap-4">
-        <Input
-          placeholder="Buscar por cliente o sucursal..."
-          value={searchTerm}
-          onChange={(e) => setSearchTerm(e.target.value)}
-          className="w-full sm:max-w-sm"
-        />
+<div className="flex flex-col lg:flex-row items-start lg:items-center gap-4">
 
-        <Select value={selectedBranch} onValueChange={setSelectedBranch}>
-          <SelectTrigger className="w-full sm:w-48">
-            <SelectValue placeholder="Todas las sucursales" />
-          </SelectTrigger>
-          <SelectContent>
-            <SelectItem value="all">Todas las sucursales</SelectItem>
-            {branches.map((branch) => (
-              <SelectItem key={branch.id} value={branch.id}>
-                {branch.name}
-              </SelectItem>
-            ))}
-          </SelectContent>
-        </Select>
+  {/* Fila 1 - Buscador */}
+  <Input
+    placeholder="Buscar por cliente o sucursal..."
+    value={searchTerm}
+    onChange={(e) => setSearchTerm(e.target.value)}
+    className="w-full lg:max-w-sm"
+  />
 
+  {/* Fila 2: Sucursal (fila separada en xs) + Fila 3: Tipo + Botones */}
+  <div className="w-full flex flex-col sm:flex-row sm:items-center gap-4 lg:flex-1 lg:flex-row lg:items-center">
+
+    {/* Parte: Select Sucursal - ocupa su propia fila en xs */}
+    <div className="w-full sm:w-1/3 lg:w-48">
+      <Select value={selectedBranch} onValueChange={setSelectedBranch}>
+        <SelectTrigger className="w-full">
+          <SelectValue placeholder="Todas las sucursales" />
+        </SelectTrigger>
+        <SelectContent>
+          <SelectItem value="all">Todas las sucursales</SelectItem>
+          {branches.map((branch) => (
+            <SelectItem key={branch.id} value={branch.id}>
+              {branch.name}
+            </SelectItem>
+          ))}
+        </SelectContent>
+      </Select>
+    </div>
+
+    {/* Parte: Select Tipo + Botones - en xs aparece en la tercera fila */}
+    <div className="w-full sm:flex-1 flex items-center gap-4 mt-2 sm:mt-0 lg:flex-1">
+      <div className="flex-1">
         <Select value={saleTypeFilter} onValueChange={setSaleTypeFilter}>
-          <SelectTrigger className="w-full sm:w-48">
+          <SelectTrigger className="w-full lg:w-48">
             <SelectValue placeholder="Todos los tipos" />
           </SelectTrigger>
           <SelectContent>
@@ -222,30 +233,35 @@ export function SalesList({ branches, userRole }: SalesListProps) {
             <SelectItem value="cotizacion">Cotización</SelectItem>
           </SelectContent>
         </Select>
-
-        {/* 👉 Botones de vista alineados a la derecha */}
-        <div className="flex items-center sm:ml-auto">
-          <Button
-            variant={viewMode === "grid" ? "default" : "outline"}
-            size="sm"
-            onClick={() => setViewMode("grid")}
-            className="ml-2 h-9 w-9 p-0"
-            aria-label="Vista en tarjetas"
-          >
-            <LayoutGrid className="h-4 w-4" />
-          </Button>
-
-          <Button
-            variant={viewMode === "table" ? "default" : "outline"}
-            size="sm"
-            onClick={() => setViewMode("table")}
-            className="ml-2 h-9 w-9 p-0"
-            aria-label="Vista en tabla"
-          >
-            <List className="h-4 w-4" />
-          </Button>
-        </div>
       </div>
+
+      <div className="flex items-center gap-2 ml-0 lg:ml-auto">
+        <Button
+          variant={viewMode === "grid" ? "default" : "outline"}
+          size="sm"
+          onClick={() => setViewMode("grid")}
+          className="h-9 w-9 p-0"
+          aria-label="Vista en tarjetas"
+        >
+          <LayoutGrid className="h-4 w-4" />
+        </Button>
+
+        <Button
+          variant={viewMode === "table" ? "default" : "outline"}
+          size="sm"
+          onClick={() => setViewMode("table")}
+          className="h-9 w-9 p-0"
+          aria-label="Vista en tabla"
+        >
+          <List className="h-4 w-4" />
+        </Button>
+      </div>
+    </div>
+
+  </div>
+</div>
+
+
 
       {isLoading ? (
         <div className="text-center py-8 text-muted-foreground">Cargando ventas...</div>
@@ -386,11 +402,12 @@ export function SalesList({ branches, userRole }: SalesListProps) {
               const isFullyPaid = sale.sale_type === "credito" && totalPaid >= (sale.total_amount || 0)
 
               return (
-                <Card key={sale.id} className="hover:shadow-md transition-shadow">
+                <Card key={sale.id} className="hover:shadow-lg transition-all duration-200">
                   <CardContent className="p-4 space-y-3">
-                    <div className="flex items-start justify-between">
-                      <div className="space-y-1">
-                        <p className="text-sm font-medium">
+                    {/* Header */}
+                    <div className="flex items-start justify-between gap-2">
+                      <div className="space-y-2 flex-1 min-w-0">
+                        <p className="text-xs sm:text-sm font-medium text-muted-foreground">
                           {new Date(sale.created_at).toLocaleDateString("es-MX", {
                             year: "numeric",
                             month: "short",
@@ -399,77 +416,87 @@ export function SalesList({ branches, userRole }: SalesListProps) {
                             minute: "2-digit",
                           })}
                         </p>
-                        <div className="flex gap-2 flex-wrap">
-                          <Badge variant="outline">{sale.branch.name}</Badge>
+                        <div className="flex gap-1.5 flex-wrap">
+                          <div className="flex items-center gap-1.5 px-2 py-0.5 rounded-md bg-muted/50">
+                            <div className={`h-1.5 w-1.5 rounded-full ${getBranchColor(sale.branch_id)}`} />
+                            <span className="text-xs font-medium truncate">{sale.branch.name}</span>
+                          </div>
                           {getSaleTypeBadge(sale.sale_type || "remision")}
                           {sale.sale_type === "credito" &&
                             (isFullyPaid ? (
-                              <Badge className="bg-emerald-500">Pagado</Badge>
+                              <Badge className="bg-emerald-500 text-xs">Pagado</Badge>
                             ) : (
                               getPaymentStatusBadge(sale.payment_status || "pending")
                             ))}
                         </div>
                       </div>
-                      <Button variant="ghost" size="sm" onClick={() => handleViewDetails(sale.id)}>
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        onClick={() => handleViewDetails(sale.id)}
+                        className="flex-shrink-0 h-8 w-8 p-0"
+                      >
                         <Eye className="h-4 w-4" />
                       </Button>
                     </div>
 
+                    {/* Info */}
                     <div className="space-y-2 text-sm">
-                      <div className="flex justify-between">
-                        <span className="text-muted-foreground">Cliente:</span>
-                        <span className="font-medium">{sale.customer?.name || "Cliente General"}</span>
+                      <div className="flex justify-between items-start gap-2">
+                        <span className="text-muted-foreground text-xs">Cliente:</span>
+                        <span className="font-medium text-right truncate flex-1">{sale.customer?.name || "Cliente General"}</span>
                       </div>
-                      <div className="flex justify-between">
+                      <div className="flex justify-between items-center pt-2 border-t">
                         <span className="text-muted-foreground">Total:</span>
-                        <span className="font-semibold">${(sale.total_amount || 0).toFixed(2)}</span>
+                        <span className="font-bold text-lg">${(sale.total_amount || 0).toFixed(2)}</span>
                       </div>
                       {sale.sale_type === "credito" && (
-                        <div className="flex justify-between">
+                        <div className="flex justify-between items-center">
                           <span className="text-muted-foreground">Pagado:</span>
-                          <span className="font-semibold">${totalPaid.toFixed(2)}</span>
+                          <span className="font-semibold text-emerald-600">${totalPaid.toFixed(2)}</span>
                         </div>
                       )}
                       {sale.sale_type !== "cotizacion" && sale.sale_type !== "credito" && (
                         <>
                           <div className="flex justify-between">
                             <span className="text-muted-foreground">Pagado:</span>
-                            <span>${(sale.payment_received || 0).toFixed(2)}</span>
+                            <span className="font-medium">${(sale.payment_received || 0).toFixed(2)}</span>
                           </div>
                           <div className="flex justify-between">
                             <span className="text-muted-foreground">Cambio:</span>
-                            <span>${(sale.change_given || 0).toFixed(2)}</span>
+                            <span className="font-medium">${(sale.change_given || 0).toFixed(2)}</span>
                           </div>
                         </>
                       )}
                       <div className="flex justify-between pt-2 border-t">
-                        <span className="text-muted-foreground">Vendedor:</span>
-                        <span className="text-xs">
+                        <span className="text-muted-foreground text-xs">Vendedor:</span>
+                        <span className="text-xs font-medium truncate flex-1 text-right">
                           {sale.created_by_profile?.name || sale.created_by_profile?.username || "Usuario"}
                         </span>
                       </div>
                     </div>
 
-                    <div className="flex gap-2">
+                    {/* Acciones */}
+                    <div className="flex gap-2 pt-2">
                       <Button
                         variant="outline"
                         size="sm"
-                        className="flex-1 bg-transparent"
+                        className="flex-1 bg-transparent text-xs sm:text-sm"
                         onClick={() => handleGeneratePDF(sale)}
                       >
-                        <FileText className="h-4 w-4 mr-2" />
-                        Ver PDF
+                        <FileText className="h-3.5 w-3.5 sm:h-4 sm:w-4 sm:mr-2" />
+                        <span className="hidden sm:inline">PDF</span>
                       </Button>
 
                       {sale.sale_type === "credito" && !isFullyPaid && (
                         <Button
                           variant="default"
                           size="sm"
-                          className="flex-1"
+                          className="flex-1 text-xs sm:text-sm"
                           onClick={() => handleOpenPaymentDialog(sale)}
                         >
-                          <DollarSign className="h-4 w-4 mr-2" />
-                          Pagar
+                          <DollarSign className="h-3.5 w-3.5 sm:h-4 sm:w-4 sm:mr-2" />
+                          <span className="hidden sm:inline">Pagar</span>
                         </Button>
                       )}
 
@@ -477,7 +504,7 @@ export function SalesList({ branches, userRole }: SalesListProps) {
                         <Button
                           variant="outline"
                           size="sm"
-                          className="flex-1 bg-transparent"
+                          className="flex-1 bg-purple-500/10 text-purple-700 hover:bg-purple-500/20 text-xs sm:text-sm"
                           onClick={() => handleConvertToSale(sale.id)}
                         >
                           Convertir

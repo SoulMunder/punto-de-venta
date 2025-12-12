@@ -144,37 +144,39 @@ export function ProductCardList() {
   return (
     <div className="space-y-4 sm:space-y-6 p-2 sm:p-4">
       {/* Buscador y botón nuevo */}
-      <div className="flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-3 sm:gap-4">
-        <div className="flex items-center gap-2 max-w-full sm:max-w-md">
-          {/* Input de búsqueda */}
-          <div className="relative flex-1">
-            <Search className="absolute left-3 top-1/2 h-3.5 w-3.5 sm:h-4 sm:w-4 -translate-y-1/2 text-muted-foreground" />
+      <div className="flex flex-col lg:flex-row items-stretch lg:items-center justify-between gap-3 lg:gap-4">
+        {/* Buscador (ocupa todo el espacio disponible) */}
+        <div className="w-full lg:max-w-md">
+          <div className="relative">
+            <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
             <Input
               placeholder="Buscar productos..."
               value={searchTerm}
               onChange={(e) => setSearchTerm(e.target.value)}
-              className="pl-8 sm:pl-9 h-9 sm:h-10 text-xs sm:text-sm w-[25vw]"
+              className="pl-8 lg:pl-9 h-9 text-sm w-full"
             />
           </div>
         </div>
 
-        <div className="flex gap-2">
+        {/*}
+        <div className="flex flex-col sm:flex-row lg:flex-row gap-2 w-full lg:w-auto">
           <Link
             href="/admin/products/new"
-            className="w-full sm:w-auto h-9 sm:h-10 text-xs sm:text-sm inline-flex items-center justify-center px-3 py-2 bg-primary text-white rounded-md hover:bg-primary/90"
+            className="w-full lg:w-auto h-9 lg:h-10 text-xs lg:text-sm inline-flex items-center justify-center px-3 py-2 bg-primary text-white rounded-md hover:bg-primary/90"
           >
-            <Plus className="mr-2 h-3.5 w-3.5 sm:h-4 sm:w-4" />
+            <Plus className="mr-2 h-3.5 w-3.5 lg:h-4 lg:w-4" />
             Nuevo Producto
           </Link>
 
           <Link
             href="/admin/products/upload_catalog"
-            className="w-full sm:w-auto h-9 sm:h-10 text-xs sm:text-sm inline-flex items-center justify-center px-3 py-2 bg-primary text-white rounded-md hover:bg-primary/90"
+            className="w-full lg:w-auto h-9 lg:h-10 text-xs lg:text-sm inline-flex items-center justify-center px-3 py-2 bg-primary text-white rounded-md hover:bg-primary/90"
           >
-            <Book className="mr-2 h-3.5 w-3.5 sm:h-4 sm:w-4" />
+            <Book className="mr-2 h-3.5 w-3.5 lg:h-4 lg:w-4" />
             Cargar catálogo
           </Link>
         </div>
+        */}
       </div>
 
       {/* Contenido */}
@@ -322,6 +324,7 @@ export function ProductCardList() {
                   <Eye className="h-2.5 w-2.5 sm:h-3 sm:w-3 sm:mr-1" />
                   <span className="hidden sm:inline">Ver</span>
                 </Button>
+                {/*
                 <Button
                   variant="outline"
                   size="sm"
@@ -341,6 +344,7 @@ export function ProductCardList() {
                 >
                   <Trash2 className="h-2.5 w-2.5 sm:h-3 sm:w-3 text-destructive" />
                 </Button>
+                */}
               </CardFooter>
             </Card>
           ))}
