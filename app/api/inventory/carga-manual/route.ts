@@ -23,14 +23,25 @@ export async function POST(req: Request) {
       )
     }
 
+    const numericCodigo = Number(codigo)
+    if (isNaN(numericCodigo)) {
+      return NextResponse.json(
+        { error: "Código inválido" },
+        { status: 400 }
+      )
+    }
+
     const mongoClient = await clientPromise
     const trupperDB = mongoClient.db(process.env.TRUPPER_DB_NAME)
     const systemDB = mongoClient.db(process.env.SYSTEM_COLLECTION_NAME)
 
-    // 🔍 Buscar producto
-    const producto = await trupperDB
-      .collection("products")
-      .findOne({ codigo: Number(codigo) })
+    // 🔍 Buscar producto en Trupper
+    let producto = await trupperDB.collection("products").findOne({ codigo: numericCodigo })
+
+    // 🔍 Si no se encuentra, buscar en own-products (SYSTEM_COLLECTION_NAME)
+    if (!producto) {
+      producto = await systemDB.collection("own_products").findOne({ codigo: numericCodigo })
+    }
 
     if (!producto) {
       return NextResponse.json(
@@ -41,7 +52,7 @@ export async function POST(req: Request) {
 
     // 🔄 Actualizar o crear inventario
     const result = await systemDB.collection("inventory").updateOne(
-      { codigo: Number(codigo), branch },
+      { codigo: numericCodigo, branch },
       {
         $inc: { cantidad: Number(cantidad) },
         $set: { updatedAt: new Date() },
@@ -57,12 +68,12 @@ export async function POST(req: Request) {
     // 📌 Registrar movimiento en la colección logs
     await systemDB.collection("inventory_logs").insertOne({
       _id: new ObjectId(),
-      codigo: Number(codigo),
+      codigo: numericCodigo,
       cantidad: Number(cantidad),
-      tipo: "Entrada",                 // entrada al inventario
-      motivo: "Compra de carga manual",    // motivo predefinido
+      tipo: "Entrada",
+      motivo: "Compra de carga manual",
       createdAt: new Date(),
-      createdBy: createdBy,   // 👈 AQUI guardas al usuario real
+      createdBy: createdBy || "Desconocido", // fallback
     })
 
     return NextResponse.json({

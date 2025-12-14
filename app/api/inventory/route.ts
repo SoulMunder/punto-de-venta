@@ -1,13 +1,19 @@
 import { NextResponse } from "next/server"
-import { clientPromise } from "@/lib/mongo" // <-- conexión persistente global
+import { MongoClient } from "mongodb"
+
+const uri = process.env.MONGODB_URI!
+const client = new MongoClient(uri)
+
+let clientPromise: Promise<MongoClient>
+if (!global._mongoClientPromise) {
+  global._mongoClientPromise = client.connect()
+}
+clientPromise = global._mongoClientPromise
 
 export async function GET(request: Request) {
   try {
     const { searchParams } = new URL(request.url)
-    const limit = searchParams.has("limit")
-      ? parseInt(searchParams.get("limit")!)
-      : 0 // 0 significa “sin límite” para mongo
-
+    const limit = searchParams.has("limit") ? parseInt(searchParams.get("limit")!) : 0
     const offset = parseInt(searchParams.get("offset") || "0")
     const rawSearch = searchParams.get("searchTerm") || ""
     const decodedSearch = decodeURIComponent(rawSearch).trim()
@@ -17,72 +23,150 @@ export async function GET(request: Request) {
     const trupperDb = client.db(process.env.TRUPPER_DB_NAME)
 
     const inventoryCollection = inventoryDb.collection("inventory")
-    const productsCollection = trupperDb.collection("products")
+    const trupperProducts = trupperDb.collection("products")
+    const ownProducts = inventoryDb.collection("own_products")
 
-    // --- Filtro de búsqueda ---
-    const filtro: any = {}
-    if (decodedSearch) {
-      const safeRegex = new RegExp(decodedSearch.replace(/[.*+?^${}()|[\]\\]/g, "\\$&"), "i")
+    // 🚀 SIN BÚSQUEDA: Query directo
+    if (!decodedSearch) {
+      const [inventoryDocs, total] = await Promise.all([
+        inventoryCollection
+          .find({})
+          .skip(offset)
+          .limit(limit > 0 ? limit : 0)
+          .toArray(),
+        inventoryCollection.countDocuments({})
+      ])
 
-      filtro.$or = [
-        { descripcion: { $regex: safeRegex } },          // búsqueda en descripcion
-        { ean: { $regex: safeRegex } },                  // búsqueda en ean
-        { codigo: { $eq: Number(decodedSearch) } },      // búsqueda exacta si es número
-        { codigo: { $regex: safeRegex.toString() } }     // fallback (solo si código fuera string)
+      const inventoryCodes = inventoryDocs.map(doc => doc.codigo).filter(Boolean)
+      
+      const [productsArrayTrupper, productsArrayOwn] = await Promise.all([
+        trupperProducts.find({ codigo: { $in: inventoryCodes } }).toArray(),
+        ownProducts.find({ codigo: { $in: inventoryCodes } }).toArray()
+      ])
+
+      const productMap: Record<string, any> = {}
+      productsArrayTrupper.forEach(p => productMap[p.codigo] = { ...p, isOwnProduct: false })
+      productsArrayOwn.forEach(p => productMap[p.codigo] = { ...p, isOwnProduct: true })
+
+      const data = inventoryDocs.map(inv => ({
+        ...inv,
+        product: productMap[inv.codigo] || null
+      }))
+
+      return NextResponse.json({ data, total })
+    }
+
+    // 🔍 CON BÚSQUEDA OPTIMIZADA
+    const isNumeric = /^\d+$/.test(decodedSearch)
+    
+    // ⚡ BÚSQUEDA POR CÓDIGO (más rápida)
+    if (isNumeric) {
+      const numericCode = Number(decodedSearch)
+      
+      const [inventoryDocs, total] = await Promise.all([
+        inventoryCollection
+          .find({ codigo: numericCode })
+          .skip(offset)
+          .limit(limit > 0 ? limit : 0)
+          .toArray(),
+        inventoryCollection.countDocuments({ codigo: numericCode })
+      ])
+
+      if (inventoryDocs.length > 0) {
+        const [productsArrayTrupper, productsArrayOwn] = await Promise.all([
+          trupperProducts.find({ codigo: numericCode }).toArray(),
+          ownProducts.find({ codigo: numericCode }).toArray()
+        ])
+
+        const productMap: Record<string, any> = {}
+        productsArrayTrupper.forEach(p => productMap[p.codigo] = { ...p, isOwnProduct: false })
+        productsArrayOwn.forEach(p => productMap[p.codigo] = { ...p, isOwnProduct: true })
+
+        const data = inventoryDocs.map(inv => ({
+          ...inv,
+          product: productMap[inv.codigo] || null
+        }))
+
+        return NextResponse.json({ data, total })
+      }
+    }
+
+    // 📝 BÚSQUEDA POR TEXTO (usando regex optimizado)
+    const safeRegex = new RegExp(
+      "^" + decodedSearch.replace(/[.*+?^${}()|[\]\\]/g, "\\$&"),
+      "i"
+    )
+
+    const filtro: any = {
+      $or: [
+        { descripcion: { $regex: safeRegex } },
+        { ean: { $regex: safeRegex } },
+        { codigo: { $regex: safeRegex } }
       ]
     }
 
-    // 1️⃣ Obtener productos filtrados
-    const filteredProductCodes =
-      decodedSearch.length > 0
-        ? (
-          await productsCollection
-            .find(filtro, { projection: { codigo: 1 } })
-            .toArray()
-        ).map((p) => p.codigo)
-        : []
+    // Buscar códigos en paralelo (con límite para evitar sobrecarga)
+    const [trupperArray, ownArray] = await Promise.all([
+      trupperProducts.find(filtro, { 
+        projection: { codigo: 1 },
+        limit: 1000 // Limitar resultados
+      }).toArray(),
+      ownProducts.find(filtro, { 
+        projection: { codigo: 1 },
+        limit: 1000
+      }).toArray()
+    ])
 
-    // 2️⃣ Filtro de inventario
-    const inventoryFilter =
-      decodedSearch.length > 0 ? { codigo: { $in: filteredProductCodes } } : {}
+    const allProductCodes = [
+      ...new Set([
+        ...trupperArray.map(p => p.codigo),
+        ...ownArray.map(p => p.codigo)
+      ])
+    ]
 
-    // 3️⃣ Total
-    const total = await inventoryCollection.countDocuments(inventoryFilter)
+    if (allProductCodes.length === 0) {
+      return NextResponse.json({ data: [], total: 0 })
+    }
 
-    // 4️⃣ Paginado
-    // 4️⃣ Paginado
-    const cursor = inventoryCollection.find(inventoryFilter)
+    // Filtrar inventario
+    const inventoryFilter = { codigo: { $in: allProductCodes } }
 
-    // solo aplicar limit si el usuario lo envió explícitamente
-    if (limit > 0) cursor.limit(limit)
+    const [inventoryDocs, total] = await Promise.all([
+      inventoryCollection
+        .find(inventoryFilter)
+        .skip(offset)
+        .limit(limit > 0 ? limit : 0)
+        .toArray(),
+      inventoryCollection.countDocuments(inventoryFilter)
+    ])
 
-    // aplicar offset solo si es mayor a 0
-    if (offset > 0) cursor.skip(offset)
+    // Traer productos relacionados
+    const inventoryCodes = inventoryDocs.map(doc => doc.codigo).filter(Boolean)
 
-    const inventoryDocs = await cursor.toArray()
-
-    // 5️⃣ Productos relacionados
-    const inventoryCodes = inventoryDocs.map((doc) => doc.codigo).filter(Boolean)
-    const productsArray = await productsCollection
-      .find({ codigo: { $in: inventoryCodes } })
-      .toArray()
+    const [productsArrayTrupper, productsArrayOwn] = await Promise.all([
+      trupperProducts.find({ codigo: { $in: inventoryCodes } }).toArray(),
+      ownProducts.find({ codigo: { $in: inventoryCodes } }).toArray()
+    ])
 
     const productMap: Record<string, any> = {}
-    for (const p of productsArray) productMap[p.codigo] = p
+    productsArrayTrupper.forEach(p => productMap[p.codigo] = { ...p, isOwnProduct: false })
+    productsArrayOwn.forEach(p => productMap[p.codigo] = { ...p, isOwnProduct: true })
 
-    // 6️⃣ Combinar inventario + producto
-    const data = inventoryDocs.map((inv) => ({
+    const data = inventoryDocs.map(inv => ({
       ...inv,
-      product: productMap[inv.codigo] || null,
+      product: productMap[inv.codigo] || null
     }))
 
     return NextResponse.json({ data, total })
   } catch (error) {
     console.error("❌ Error al obtener inventario:", error)
-    return NextResponse.json({ error: "Error al obtener inventario" }, { status: 500 })
+    return NextResponse.json(
+      { error: "Error al obtener inventario" },
+      { status: 500 }
+    )
   }
 }
-
+{/*
 
 export async function DELETE() {
   try {
@@ -101,3 +185,5 @@ export async function DELETE() {
     return NextResponse.json({ error: "Error al eliminar inventario" }, { status: 500 })
   }
 }
+
+*/}

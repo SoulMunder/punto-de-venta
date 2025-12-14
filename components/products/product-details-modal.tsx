@@ -10,9 +10,16 @@ interface ProductDetailsModalProps {
   open: boolean
   onOpenChange: (open: boolean) => void
   showEditButton?: boolean
+  showCustomPrices?: boolean   // ⬅️ nueva bandera
 }
 
-export function ProductDetailsModal({ product, open, onOpenChange }: ProductDetailsModalProps) {
+export function ProductDetailsModal({
+  product,
+  open,
+  onOpenChange,
+  showCustomPrices = false   // ⬅️ valor default
+}: ProductDetailsModalProps) {
+
   if (!product) return null
 
   return (
@@ -43,28 +50,32 @@ export function ProductDetailsModal({ product, open, onOpenChange }: ProductDeta
             </div>
 
             {/* Precios personalizados */}
-            <div>
-              <h4 className="text-base sm:text-lg font-semibold mb-2 flex items-center gap-1 text-black">
-                <DollarSign className="h-5 w-5 text-blue-500" /> Precios Personalizados
-              </h4>
-              {product.customPrices && product.customPrices.length > 0 ? (
-                <div className="space-y-2">
-                  {product.customPrices.map((custom, index) => (
-                    <div key={index} className="p-2 sm:p-3 flex justify-between items-center border rounded-lg bg-blue-50">
-                      <p className="font-semibold text-blue-700 truncate">{custom.price_name}</p>
-                      <p className="font-bold text-blue-900 whitespace-nowrap ml-2">
-                        ${custom.price_value.toFixed(2)}
-                      </p>
-                    </div>
-                  ))}
-                </div>
-              ) : (
-                <div className="flex flex-col items-center justify-center p-4 border rounded-lg bg-blue-50 text-blue-700">
-                  <DollarSign className="h-6 w-6 mb-1" />
-                  <p className="text-sm">No hay precios personalizados</p>
-                </div>
-              )}
-            </div>
+            {showCustomPrices && (
+              <div>
+                <h4 className="text-base sm:text-lg font-semibold mb-2 flex items-center gap-1 text-black">
+                  <DollarSign className="h-5 w-5 text-blue-500" /> Precios Personalizados
+                </h4>
+
+                {product.customPrices && product.customPrices.length > 0 ? (
+                  <div className="space-y-2">
+                    {product.customPrices.map((custom, index) => (
+                      <div key={index} className="p-2 sm:p-3 flex justify-between items-center border rounded-lg bg-blue-50">
+                        <p className="font-semibold text-blue-700 truncate">{custom.price_name}</p>
+                        <p className="font-bold text-blue-900 whitespace-nowrap ml-2">
+                          ${custom.price_value.toFixed(2)}
+                        </p>
+                      </div>
+                    ))}
+                  </div>
+                ) : (
+                  <div className="flex flex-col items-center justify-center p-4 border rounded-lg bg-blue-50 text-blue-700">
+                    <DollarSign className="h-6 w-6 mb-1" />
+                    <p className="text-sm">No hay precios personalizados</p>
+                  </div>
+                )}
+              </div>
+            )}
+
 
             {/* Información Fiscal */}
             {(product.codigoSAT || product.descripcionSAT) && (

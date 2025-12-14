@@ -1,13 +1,13 @@
 "use client"
 
 import { useState, useEffect } from "react"
-// import { createClient } from "@/lib/supabase/client"
 import { Card, CardContent } from "@/components/ui/card"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
-import { ArrowRight, Eye, Package } from "lucide-react"
+import { ArrowLeftRight, ArrowRight, Eye, Package } from "lucide-react"
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog"
 import { Separator } from "@/components/ui/separator"
+import Link from "next/link"
 
 interface Movement {
   _id: string
@@ -33,8 +33,6 @@ export function MovementsList() {
   const [selectedMovement, setSelectedMovement] = useState<Movement | null>(null)
   const [detailsOpen, setDetailsOpen] = useState(false)
 
-  // const supabase = createClient()
-
   useEffect(() => {
     loadMovements()
   }, [])
@@ -43,87 +41,98 @@ export function MovementsList() {
     setLoading(true)
     try {
       const res = await fetch("/api/inventory/transfer")
-      console.log("🚀 Respuesta de movimientos:", res)
       if (!res.ok) throw new Error("Error al obtener movimientos")
 
       const data = await res.json()
-      console.log("🚀 Movimientos obtenidos:", data)
-      setMovements(data) // guardamos los movimientos en el state
+      setMovements(data)
     } catch (err) {
-      console.error("❌ Error cargando movimientos:", err)
+      console.error("Error cargando movimientos:", err)
     } finally {
       setLoading(false)
     }
   }
-
 
   const handleViewDetails = (movement: Movement) => {
     setSelectedMovement(movement)
     setDetailsOpen(true)
   }
 
-  if (loading) {
-    return <div className="text-center py-8">Cargando movimientos...</div>
-  }
-
-  if (movements.length === 0) {
-    return (
-      <Card>
-        <CardContent className="p-8 text-center text-muted-foreground">No hay traslados registrados</CardContent>
-      </Card>
-    )
-  }
-
   return (
-    <>
-      <div className="grid grid-cols-1 gap-4">
-        {movements.map((movement) => (
-          <Card key={movement._id} className="hover:shadow-md transition-shadow">
-            <CardContent className="p-4">
-              <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3">
-                <div className="flex-1 space-y-2 w-full">
-                  <div className="flex flex-col sm:flex-row items-start sm:items-center gap-2">
-                    <div className="flex items-center gap-2 text-sm font-medium">
-                      <span>{movement.fromBranch.name}</span>
-                      <ArrowRight className="h-4 w-4 text-muted-foreground" />
-                      <span>{movement.toBranch.name}</span>
+    <div className="space-y-4">
+      {/* Botón Trasladar Inventario siempre visible */}
+      <Link href="/admin/inventory/transfer">
+        <Button size="sm" className="gap-2 whitespace-nowrap">
+          <ArrowLeftRight className="h-4 w-4" />
+          <span className="lg:hidden">Trasladar</span>
+          <span className="hidden lg:inline">Trasladar Inventario</span>
+        </Button>
+      </Link>
+
+      {/* Mostrar contenido dependiendo si hay movimientos */}
+      {loading ? (
+        <div className="text-center py-8">Cargando movimientos...</div>
+      ) : movements.length === 0 ? (
+        <Card className="mt-4">
+          <CardContent className="p-8 text-center text-muted-foreground">
+            No hay traslados registrados
+          </CardContent>
+        </Card>
+      ) : (
+        <div className="grid grid-cols-1 gap-4">
+          {movements.map((movement) => (
+            <Card key={movement._id} className="hover:shadow-md transition-shadow">
+              <CardContent className="p-4">
+                <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3">
+                  <div className="flex-1 space-y-2 w-full">
+                    <div className="flex flex-col sm:flex-row items-start sm:items-center gap-2">
+                      <div className="flex items-center gap-2 text-sm font-medium">
+                        <span>{movement.fromBranch.name}</span>
+                        <ArrowRight className="h-4 w-4 text-muted-foreground" />
+                        <span>{movement.toBranch.name}</span>
+                      </div>
+                      <Badge
+                        variant={movement.status === "completed" ? "default" : "secondary"}
+                        className="text-xs"
+                      >
+                        {movement.status === "completed" ? "Completado" : "Pendiente"}
+                      </Badge>
                     </div>
-                    <Badge variant={movement.status === "completed" ? "default" : "secondary"} className="text-xs">
-                      {movement.status === "completed" ? "Completado" : "Pendiente"}
-                    </Badge>
+
+                    <div className="grid grid-cols-1 sm:grid-cols-3 gap-2 text-xs text-muted-foreground">
+                      <div>
+                        <span className="font-medium">Fecha:</span>{" "}
+                        {new Date(movement.movementDate).toLocaleDateString("es-MX", {
+                          year: "numeric",
+                          month: "short",
+                          day: "numeric",
+                          hour: "2-digit",
+                          minute: "2-digit",
+                        })}
+                      </div>
+                      <div>
+                        <span className="font-medium">Productos:</span>{" "}
+                        {movement.inventoryMovementItems.length}
+                      </div>
+                      <div>
+                        <span className="font-medium">Creado por:</span> {movement.createdBy.name}
+                      </div>
+                    </div>
+
+                    {movement.notes && (
+                      <p className="text-xs text-muted-foreground italic">"{movement.notes}"</p>
+                    )}
                   </div>
 
-                  <div className="grid grid-cols-1 sm:grid-cols-3 gap-2 text-xs text-muted-foreground">
-                    <div>
-                      <span className="font-medium">Fecha:</span>{" "}
-                      {new Date(movement.movementDate).toLocaleDateString("es-MX", {
-                        year: "numeric",
-                        month: "short",
-                        day: "numeric",
-                        hour: "2-digit",
-                        minute: "2-digit",
-                      })}
-                    </div>
-                    <div>
-                      <span className="font-medium">Productos:</span> {movement.inventoryMovementItems.length}
-                    </div>
-                    <div>
-                      <span className="font-medium">Creado por:</span> {movement.createdBy.name}
-                    </div>
-                  </div>
-
-                  {movement.notes && <p className="text-xs text-muted-foreground italic">"{movement.notes}"</p>}
+                  <Button variant="outline" size="sm" onClick={() => handleViewDetails(movement)}>
+                    <Eye className="h-4 w-4 mr-2" />
+                    Ver Detalles
+                  </Button>
                 </div>
-
-                <Button variant="outline" size="sm" onClick={() => handleViewDetails(movement)}>
-                  <Eye className="h-4 w-4 mr-2" />
-                  Ver Detalles
-                </Button>
-              </div>
-            </CardContent>
-          </Card>
-        ))}
-      </div>
+              </CardContent>
+            </Card>
+          ))}
+        </div>
+      )}
 
       {/* Details Dialog */}
       {selectedMovement && (
@@ -149,7 +158,9 @@ export function MovementsList() {
                 </div>
                 <div>
                   <p className="text-muted-foreground">Estado</p>
-                  <Badge variant={selectedMovement.status === "completed" ? "default" : "secondary"}>
+                  <Badge
+                    variant={selectedMovement.status === "completed" ? "default" : "secondary"}
+                  >
                     {selectedMovement.status === "completed" ? "Completado" : "Pendiente"}
                   </Badge>
                 </div>
@@ -199,6 +210,6 @@ export function MovementsList() {
           </DialogContent>
         </Dialog>
       )}
-    </>
+    </div>
   )
 }

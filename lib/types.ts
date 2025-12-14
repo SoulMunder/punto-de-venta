@@ -53,18 +53,18 @@ export type Product = {
 
   // Imagen opcional
   image_url?: string
-  
-   // 🟢 Precios personalizados
+
+  // 🟢 Precios personalizados
   customPrices?: {
     price_name: string
     price_value: number
   }[]
 }
 
-export interface InventoryProduct extends Product{
+export interface InventoryProduct extends Product {
   barcode: string
   custom_prices: number[]
-  cantidad:number
+  cantidad: number
   branch: string
 }
 
@@ -154,7 +154,7 @@ export interface SaleWithRelations extends Sale {
       name: string
       truper_code: string
       brand: string
-      product_code:string
+      product_code: string
     }
   }
 }
@@ -173,7 +173,7 @@ export interface CartItem {
 
 export interface SaleItem {
   id: string
-  sale_id: string 
+  sale_id: string
   product_code: string
   quantity: number
   unit_price: number
@@ -205,7 +205,7 @@ export interface SaleReceipt {
   }[]
 }
 
-export interface QuoteSale{
+export interface QuoteSale {
   id: string;
   branch_id: string;
   customer_id: string | null;
@@ -218,7 +218,7 @@ export interface QuoteSale{
   parent_sale_id: string | null;
   created_at: string;
   sale_items: SaleItem[];
-} 
+}
 
 export interface Profile {
   id: string
@@ -239,6 +239,66 @@ export interface InventoryLog {
   createdAt: string
   createdBy: string
 }
+
+
+
+export interface OwnProduct {
+  _id: string
+  codigo?: number | null
+  clave?: string | null
+  descripcion: string
+  precio: number
+  unidad?: string | null
+  ean: string
+  marca?: string | null
+  codigoSAT?: string | null
+  descripcionSAT?: string | null
+  familia?: string | null
+  descripcionFamilia?: string | null
+  imageUrl?: string | null
+  createdAt?: Date
+}
+
+
+export interface OwnProductForm {
+  descripcion: string       // obligatorio
+  precio: string            // obligatorio, viene como string del input
+  codigo?: number
+  clave?: string
+  unidad?: string
+  marca?: string
+  codigoSAT?: string
+  descripcionSAT?: string
+  familia?: string
+  descripcionFamilia?: string
+  imageFile?: String | null   // opcional
+}
+
+export interface Recipe {
+  _id: string
+  nombreReceta: string
+  codigoPadre: number
+  cantidadPadre: number
+  codigoHijo: number
+  cantidadHijo: number
+}
+
+export interface RecipeForm {
+  nombreReceta: string
+  codigoPadre: number | ""
+  cantidadPadre: number | ""
+  codigoHijo: number | ""
+  cantidadHijo: number | ""
+}
+
+
+export interface RecipeLog {
+  action: "CREATE" | "UPDATE" | "DELETE" | "APPLY"
+  user: string
+  recipeName: string // <- opcional, para guardar el nombre en vez de _id
+  createdAt: Date
+}
+
 
 export interface ProfileWithBranches extends Profile {
   assignedBranches?: string[]

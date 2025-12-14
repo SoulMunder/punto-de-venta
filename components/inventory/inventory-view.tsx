@@ -39,6 +39,8 @@ import { toast } from "sonner"
 import { cn } from "@/lib/utils"
 
 interface ProductWithInventory extends Product {
+  imageUrl?: string
+  isOwnProduct?: boolean
   cantidad: number
   branch: {
     name: string
@@ -49,21 +51,20 @@ interface ProductWithInventory extends Product {
 }
 
 interface InventoryViewProps {
-  manualModalOpen: boolean
-  setManualModalOpen: React.Dispatch<React.SetStateAction<boolean>>
   deleteInventoryModalOpen: boolean
   setDeleteInventoryModalOpen: React.Dispatch<React.SetStateAction<boolean>>
 }
 
+
 export function InventoryView({
-  manualModalOpen,
-  setManualModalOpen,
   deleteInventoryModalOpen,
   setDeleteInventoryModalOpen,
 }: InventoryViewProps) {
   const { data: session } = useSession()
-
   const router = useRouter()
+
+  // 🔴 Nuevo: Estado para el modal de carga manual
+  const [manualModalOpen, setManualModalOpen] = useState(false)
 
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false)
   const [productToDelete, setProductToDelete] = useState<ProductWithInventory | null>(null)
@@ -133,6 +134,8 @@ export function InventoryView({
         const res = await fetch(`/api/products/search?q=${encodeURIComponent(productCode)}&limit=5`, { signal })
         if (!res.ok) throw new Error("Error buscando productos")
         const data = await res.json()
+        //console.log("Resultados de búsqueda:", data)
+
 
         if (requestId === requestIdRef.current) {
           setSearchResults(data)
@@ -156,7 +159,6 @@ export function InventoryView({
   }, [productCode, manualModalOpen])
 
   const getBranchColorByName = (branchName: string) => {
-    // Usamos el índice basado en el nombre de la sucursal
     const branchIndex = branches.findIndex(b => b.name === branchName)
     const colors = [
       'bg-blue-500',
@@ -540,10 +542,11 @@ export function InventoryView({
 
   return (
     <div className="space-y-4 sm:space-y-6 p-2 sm:p-4">
-      <div className="flex flex-col sm:flex-row justify-between gap-4">
+      {/* 🔴 NUEVO: Barra superior con botón de carga manual */}
 
+      <div className="flex flex-col sm:flex-row justify-between gap-4">
         {/* Fila 1: Buscador */}
-        <div className="flex items-center w-full">
+        <div className="flex items-center w-full gap-5">
           <div className="relative flex-1">
             <Search className="absolute left-3 top-1/2 h-3.5 w-3.5 sm:h-4 sm:w-4 -translate-y-1/2 text-muted-foreground" />
             <Input
@@ -552,12 +555,8 @@ export function InventoryView({
               onChange={(e) => setSearchTerm(e.target.value)}
               className="pl-8 sm:pl-9 h-9 sm:h-10 text-xs sm:text-sm w-full"
             />
+
           </div>
-        </div>
-
-        {/* Fila 2: Sucursal + Botones de vista (misma fila en responsive) */}
-        <div className="flex items-center justify-between sm:justify-end w-full gap-3">
-
           <Select value={selectedBranch} onValueChange={setSelectedBranch}>
             <SelectTrigger className="w-full sm:w-[200px]">
               <SelectValue placeholder="Todas las sucursales" />
@@ -571,6 +570,24 @@ export function InventoryView({
               ))}
             </SelectContent>
           </Select>
+        </div>
+
+        {/* Fila 2: Sucursal + Botones de vista */}
+        <div className="flex items-center justify-between sm:justify-end w-full gap-3">
+          {/* 🟢 Botón Gestión Manual */}
+          <Button
+            variant="default"  // Solido
+            size="sm"
+            onClick={() => setManualModalOpen(true)}
+            className="h-9 px-3 gap-2"
+          >
+            <Plus className="h-4 w-4" />
+            <span className="hidden sm:inline">Carga Manual</span>
+            <span className="sm:hidden">Manual</span>
+          </Button>
+
+
+
 
           <div className="flex items-center gap-2">
             <Button
@@ -593,11 +610,10 @@ export function InventoryView({
               <List className="h-4 w-4" />
             </Button>
           </div>
-
         </div>
       </div>
 
-
+      {/* Resto del código permanece igual... */}
       {loading ? (
         viewMode === "table" ? (
           <div className={cn("rounded-lg border bg-card shadow-sm m-0")}>
@@ -681,7 +697,6 @@ export function InventoryView({
             </div>
           </div>
         ) : (
-          // Skeleton existente para vista grid
           <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-5 gap-2 sm:gap-3">
             {Array.from({ length: entriesPerPage }).map((_, index) => (
               <Card key={index} className="overflow-hidden">
@@ -738,10 +753,8 @@ export function InventoryView({
         </div>
       ) : viewMode === "table" ? (
         <div className={cn("rounded-lg border bg-card shadow-sm m-0")}>
-          {/* Contenedor con altura fija */}
           <div style={{ height: "65vh" }}>
             <Table>
-              {/* HEADER */}
               <TableHeader
                 className={cn("sticky top-0 z-10", "bg-muted backdrop-blur supports-[backdrop-filter]:bg-muted/95")}
               >
@@ -758,7 +771,6 @@ export function InventoryView({
                 </TableRow>
               </TableHeader>
 
-              {/* BODY */}
               <TableBody>
                 {filteredProducts.map((product) => {
                   const status = getStockStatus(product.cantidad, product.lowStockThreshold ?? 10)
@@ -767,13 +779,12 @@ export function InventoryView({
                   return (
                     <TableRow key={uniqueKey} className="hover:bg-muted/30 transition-colors border-b last:border-b-0">
                       <TableCell className=" text-sm font-medium">{product.codigo}</TableCell>
-
                       <TableCell className="max-w-[300px]">
                         <div className="flex items-center gap-3">
                           <div className="h-12 w-12 rounded-md bg-muted flex items-center justify-center flex-shrink-0 overflow-hidden border">
-                            {"image_url" in product && product.image_url ? (
+                            {(product.imageUrl || product.image_url) ? (
                               <img
-                                src={product.image_url || "/placeholder.svg"}
+                                src={product.imageUrl || product.image_url || "/placeholder.svg"}
                                 alt={product.descripcion}
                                 className="h-full w-full object-cover"
                               />
@@ -784,6 +795,7 @@ export function InventoryView({
                           <span className="line-clamp-2 text-sm leading-tight">{product.descripcion}</span>
                         </div>
                       </TableCell>
+
 
                       <TableCell>
                         <Badge variant="secondary" className="font-medium">
@@ -875,9 +887,9 @@ export function InventoryView({
               <Card key={uniqueKey} className="overflow-hidden hover:shadow-lg transition-shadow">
                 <CardHeader className="p-0">
                   <div className="aspect-[4/3] relative bg-muted flex items-center justify-center overflow-hidden rounded-md">
-                    {"image_url" in product && product.image_url ? (
+                    {(product.imageUrl || product.image_url) ? (
                       <img
-                        src={product.image_url || "/placeholder.svg"}
+                        src={product.imageUrl || product.image_url || "/placeholder.svg"}
                         alt={product.descripcion}
                         className="w-full h-full object-cover"
                       />
@@ -887,12 +899,13 @@ export function InventoryView({
                   </div>
                 </CardHeader>
 
+
                 <CardContent className="p-1.5 sm:p-2 space-y-1.5 sm:space-y-2">
                   <h3 className="font-semibold text-xs sm:text-sm leading-tight line-clamp-2">{product.descripcion}</h3>
 
                   <div className="flex items-center gap-1">
                     <Badge variant="secondary" className="font-semibold text-[9px] sm:text-[10px] px-1 sm:px-1.5 py-0">
-                      {product.marca}
+                      {product.marca ?? "Sin Marca"}
                     </Badge>
                     <Badge variant="outline" className="text-[8px] sm:text-[9px] px-0.5 sm:px-1 py-0">
                       {product.descripcionFamilia}
@@ -912,37 +925,48 @@ export function InventoryView({
                     )}
                   </div>
 
-                  <div className="pt-1 border-t">
-                    <div className="grid grid-cols-3 gap-1.5 sm:gap-2 divide-x">
-                      <div className="pr-1.5 sm:pr-2">
-                        <p className="text-[8px] sm:text-[9px] text-muted-foreground mb-0.5">Distribuidor</p>
-                        <p className="text-xs sm:text-sm font-bold text-primary">
-                          {Number.isFinite(Number(product.precioDistribuidorConIVA)) &&
-                            String(product.precioDistribuidorConIVA) !== "*"
-                            ? `$${Number(product.precioDistribuidorConIVA).toFixed(2)}`
-                            : ""}
-                        </p>
-                      </div>
-                      <div className="px-1.5 sm:px-2">
-                        <p className="text-[8px] sm:text-[9px] text-muted-foreground mb-0.5">Publico</p>
-                        <p className="text-xs sm:text-sm font-bold text-primary">
-                          {Number.isFinite(Number(product.precioPublicoConIVA)) &&
-                            String(product.precioPublicoConIVA) !== "*"
-                            ? Number(product.precioPublicoConIVA).toFixed(2)
-                            : product.precioPublicoConIVA}
-                        </p>
-                      </div>
-                      <div className="pl-1.5 sm:pl-2">
-                        <p className="text-[8px] sm:text-[9px] text-muted-foreground mb-0.5">Mayoreo</p>
-                        <p className="text-xs sm:text-sm font-bold text-primary">
-                          {Number.isFinite(Number(product.precioMayoreoConIVA)) &&
-                            String(product.precioMayoreoConIVA) !== "*"
-                            ? Number(product.precioMayoreoConIVA).toFixed(2)
-                            : product.precioMayoreoConIVA}
-                        </p>
-                      </div>
-                    </div>
-                  </div>
+                 <div className="pt-1 border-t">
+  {product.isOwnProduct && product.precio !== undefined ? (
+    <div className="text-center">
+      <p className="text-[8px] sm:text-[9px] text-muted-foreground mb-0.5">Precio</p>
+      <p className="text-xs sm:text-sm font-bold text-primary">
+        ${Number(product.precio).toFixed(2)}
+      </p>
+    </div>
+  ) : (
+    <div className="grid grid-cols-3 gap-1.5 sm:gap-2 divide-x">
+      <div className="pr-1.5 sm:pr-2">
+        <p className="text-[8px] sm:text-[9px] text-muted-foreground mb-0.5">Distribuidor</p>
+        <p className="text-xs sm:text-sm font-bold text-primary">
+          {Number.isFinite(Number(product.precioDistribuidorConIVA)) &&
+          String(product.precioDistribuidorConIVA) !== "*"
+            ? `$${Number(product.precioDistribuidorConIVA).toFixed(2)}`
+            : ""}
+        </p>
+      </div>
+      <div className="px-1.5 sm:px-2">
+        <p className="text-[8px] sm:text-[9px] text-muted-foreground mb-0.5">Público</p>
+        <p className="text-xs sm:text-sm font-bold text-primary">
+          {Number.isFinite(Number(product.precioPublicoConIVA)) &&
+          String(product.precioPublicoConIVA) !== "*"
+            ? `$${Number(product.precioPublicoConIVA).toFixed(2)}`
+            : product.precioPublicoConIVA}
+        </p>
+      </div>
+      <div className="pl-1.5 sm:pl-2">
+        <p className="text-[8px] sm:text-[9px] text-muted-foreground mb-0.5">Mayoreo</p>
+        <p className="text-xs sm:text-sm font-bold text-primary">
+          {Number.isFinite(Number(product.precioMayoreoConIVA)) &&
+          String(product.precioMayoreoConIVA) !== "*"
+            ? `$${Number(product.precioMayoreoConIVA).toFixed(2)}`
+            : product.precioMayoreoConIVA}
+        </p>
+      </div>
+    </div>
+  )}
+</div>
+
+
 
                   <div className="flex justify-between items-center pt-2 border-t">
                     <span className="text-muted-foreground">Sucursal:</span>
@@ -1004,7 +1028,7 @@ export function InventoryView({
         onPageSizeChange={setEntriesPerPage}
       />
 
-      <ProductDetailsModal product={selectedProduct} open={detailsModalOpen} onOpenChange={setDetailsModalOpen} />
+      <ProductDetailsModal product={selectedProduct} open={detailsModalOpen} onOpenChange={setDetailsModalOpen} showCustomPrices={true} />
 
       <Dialog
         open={deleteDialogOpen}
@@ -1101,10 +1125,11 @@ export function InventoryView({
         </DialogContent>
       </Dialog>
 
+      {/* 🔴 Modal de Carga Manual */}
       <Dialog open={manualModalOpen} onOpenChange={setManualModalOpen}>
         <DialogContent className="sm:max-w-[425px]">
           <DialogHeader>
-            <DialogTitle>Gestión Manual</DialogTitle>
+            <DialogTitle>Carga Manual de Productos</DialogTitle>
           </DialogHeader>
           <form onSubmit={handleManualSubmit}>
             <div className="grid gap-4 py-4">
@@ -1155,10 +1180,13 @@ export function InventoryView({
                           <p className="text-xs text-muted-foreground truncate">{product.descripcion}</p>
                           <div className="flex gap-2 mt-1">
                             <Badge variant="secondary" className="text-[10px] px-1 py-0">
-                              {product.marca}
+                              {product.marca ?? "Sin definir"}
                             </Badge>
+
                             <span className="text-[10px] text-muted-foreground">
-                              ${Number(product.precioPublicoConIVA).toFixed(2)}
+                              ${Number(
+                                product.precioPublicoConIVA ?? product.precio ?? 0
+                              ).toFixed(2)}
                             </span>
                           </div>
                         </div>
@@ -1231,7 +1259,7 @@ export function InventoryView({
                     Agregando...
                   </>
                 ) : (
-                  "Agregar"
+                  "Agregar Producto"
                 )}
               </Button>
             </DialogFooter>
